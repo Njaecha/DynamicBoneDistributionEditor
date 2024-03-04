@@ -20,9 +20,20 @@ namespace DynamicBoneDistributionEditor
             else return changedKeyframes;
         }
 
+        public Keyframe[] GetInitialKeyframes()
+        {
+            return oldKeyframes;
+        }
+
         public void SetKeyframes(Keyframe[] keyframes)
         {
+            changedKeyframes = new Keyframe[keyframes.Length];
             changedKeyframes = keyframes;
+        }
+
+        internal void Reset()
+        {
+            changedKeyframes = null;
         }
     }
 }
