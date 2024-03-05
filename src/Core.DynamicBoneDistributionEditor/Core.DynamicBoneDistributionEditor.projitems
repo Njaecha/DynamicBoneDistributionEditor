@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)DBDE.Hooks.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.SceneController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.CharaController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.DynamicBoneEdit.cs" />

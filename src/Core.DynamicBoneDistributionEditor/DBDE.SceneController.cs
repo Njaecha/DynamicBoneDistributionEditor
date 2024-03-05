@@ -34,7 +34,7 @@ namespace DynamicBoneDistributionEditor
                         if (!DistributionEdits.ContainsKey(oci.itemInfo.dicKey)) DistributionEdits.Add(oci.itemInfo.dicKey, new List<DBDEDynamicBoneEdit>());
                         for (int i = 0; i < oci.dynamicBones.Length; i++)
                         {
-                            DistributionEdits[oci.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[oci.itemInfo.dicKey]).dynamicBones[i], oci.itemInfo.dicKey, intermediate[oldKey][i]));
+                            DistributionEdits[oci.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[oci.itemInfo.dicKey]).dynamicBones[i], intermediate[oldKey][i]) { RedindificiationData = oci.itemInfo.dicKey });
                         }
                     }
                 }
@@ -69,7 +69,7 @@ namespace DynamicBoneDistributionEditor
                     DistributionEdits.Add(newItem.itemInfo.dicKey, new List<DBDEDynamicBoneEdit>());
                     for (int i = 0; i < newItem.dynamicBones.Length; i++)
                     {
-                        DistributionEdits[newItem.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[newItem.itemInfo.dicKey]).dynamicBones[i], newItem.itemInfo.dicKey, DistributionEdits[olditem.itemInfo.dicKey][i]));
+                        DistributionEdits[newItem.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[newItem.itemInfo.dicKey]).dynamicBones[i], DistributionEdits[olditem.itemInfo.dicKey][i]) { RedindificiationData = newItem.itemInfo.dicKey});
                     }
                 }
             }
@@ -93,7 +93,7 @@ namespace DynamicBoneDistributionEditor
                 {
                     DynamicBone db = oci.dynamicBones[i];
                     DBDE.Logger.LogInfo($"Adding DynamicBone: Key={oci.itemInfo.dicKey} | DB={db.name} | {oci.dynamicBones.Length}");
-                    DistributionEdits[oci.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[oci.itemInfo.dicKey]).dynamicBones[i], oci.itemInfo.dicKey));
+                    DistributionEdits[oci.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[oci.itemInfo.dicKey]).dynamicBones[i]) { RedindificiationData = oci.itemInfo.dicKey});
                 }
             }
             DBDE.UI.Open(() => DistributionEdits.ContainsKey(oci.itemInfo.dicKey) ? DistributionEdits[oci.itemInfo.dicKey] : null);

@@ -8,6 +8,7 @@ using AnimationCurveEditor;
 using ExtensibleSaveFormat;
 using MessagePack;
 using ADV.Commands.Chara;
+using ActionGame;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -17,7 +18,9 @@ namespace DynamicBoneDistributionEditor
 
         protected override void OnReload(GameMode currentGameMode, bool maintainState)
         {
+            DistributionEdits.Clear();
             PluginData data = GetExtendedData();
+            if (data == null) return;
             for (int cSet = 0; cSet < ChaControl.chaFile.coordinate.Length; cSet++)
             {
                 List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits = null;
@@ -70,6 +73,7 @@ namespace DynamicBoneDistributionEditor
         protected override void OnCoordinateBeingLoaded(ChaFileCoordinate coordinate)
         {
             PluginData data = GetCoordinateExtendedData(coordinate);
+            if (data == null) return;
             List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits = null;
             if (data.data.TryGetValue("AccessoryeEdits", out var binaries) && binaries != null)
             {
@@ -112,9 +116,13 @@ namespace DynamicBoneDistributionEditor
             base.OnCoordinateBeingSaved(coordinate);
         }
 
-        protected override void OnReload(GameMode currentGameMode)
+        internal void CoordinateChangeEvent()
         {
-            base.OnReload(currentGameMode);
+            if (!DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType)) return;
+            foreach(var x in DistributionEdits[ChaControl.fileStatus.coordinateType])
+            {
+                x.Apply();
+            }
         }
 
         private void LoadData(int outfit, List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits, List<KeyValuePair<string, byte[]>> normalEdits)
@@ -149,7 +157,7 @@ namespace DynamicBoneDistributionEditor
             for (int i = 0; i < destDBs.Length; i++)
             {
                 // data used for DBAccessor
-                string name = destDBs[i].m_Root.name;
+                destDBs[i].TryGetAccessoryQualifiedName(out string name);
                 int slot = destination;
                 // find according DBDE Data on the source accessory
                 DBDEDynamicBoneEdit sourceEdit = DistributionEdits[ChaControl.fileStatus.coordinateType].Find(dbde => dbde.dynamicBone.Equals(sourcDBs[i]));
@@ -174,9 +182,15 @@ namespace DynamicBoneDistributionEditor
 
         }
 
+        public void OpenDBDE()
+        {
+            OpenDBDE(ChaControl.fileStatus.coordinateType);
+        }
+
         public void OpenDBDE(int outfit)
         {
             RefreshBoneList(outfit);
+            DBDE.Logger.LogInfo($"Opeing UI for outift {outfit}");
             DBDE.UI.Open(() => DistributionEdits[outfit]);
         }
 
@@ -197,9 +211,19 @@ namespace DynamicBoneDistributionEditor
             // == splitup between accessories and body/cloth dynamic bones to reduce possibility for ambiguous results in the getDynamicBone method.
 
             // for non accessory dynamic bones
-            List<DynamicBone> nonAccDBs = ChaControl.GetComponentsInChildren<DynamicBone>(true).Where(db => db.GetComponentsInParent<ChaAccessoryComponent>().IsNullOrEmpty()).ToList();
-            nonAccDBs.Where(b => !DistributionEdits[outfit].Any(a => a.dynamicBone.Equals(b)))
-                .ToList().ForEach(b => DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => getDynamicBone(b.m_Root.name)) { RedindificiationData = b.m_Root.name}));
+            List<KeyValuePair<string, DynamicBone>> nonAccDBs = ChaControl.GetComponentsInChildren<DynamicBone>(true)
+                .Where(db => db.GetComponentsInParent<ChaAccessoryComponent>().IsNullOrEmpty() && db.TryGetChaControlQualifiedName(out _) && db.m_Root != null )
+                .Select(db => new KeyValuePair<string, DynamicBone>(db.GetChaControlQualifiedName(), db))
+                .GroupBy(pair => pair.Key)
+                .Select(group => group.First())
+                .ToList();
+
+            DBDE.Logger.LogInfo($"{nonAccDBs.Count} Non-Accessory Dynamic Bones found");
+            nonAccDBs.Where(pair => !DistributionEdits[outfit].Any(a => a.RedindificiationData is string q && q==pair.Key))
+                .ToList().ForEach(pair => {
+                    DBDE.Logger.LogInfo($"Registering Non-Accessory Dyanmic Bone: {pair.Key}");
+                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => getDynamicBone(pair.Key)) { RedindificiationData = pair.Key }); 
+                });
 
             // for accessory dynamic bones
             for(int i = 0; i < ChaControl.infoAccessory.Length; i++)
@@ -208,9 +232,21 @@ namespace DynamicBoneDistributionEditor
                 ChaAccessoryComponent accs = ChaControl.GetAccessoryComponent(slot);
                 if (accs != null)
                 {
-                    List<DynamicBone> accDbs = accs.GetComponentsInChildren<DynamicBone>(true).ToList();
-                    accDbs.Where(b => !DistributionEdits[outfit].Any(a => a.dynamicBone.Equals(b)))
-                        .ToList().ForEach(b => DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => getDynamicBone(b.m_Root.name, slot)) { RedindificiationData = new KeyValuePair<int,string>(slot, b.m_Root.name)}));
+                    List<KeyValuePair<string, DynamicBone>> accDbs = accs.GetComponentsInChildren<DynamicBone>(true)
+                        .Where(db => db.TryGetAccessoryQualifiedName(out _) && db.m_Root != null)
+                        .Select(db => new KeyValuePair<string, DynamicBone>(db.GetAccessoryQualifiedName(), db))
+                        .GroupBy(pair => pair.Key)
+                        .Select(group => group.First())
+                        .ToList();
+
+                    if (accDbs.IsNullOrEmpty()) continue;
+                    DBDE.Logger.LogInfo($"{accDbs.Count} Accessory (Slot {slot}) Dynamic Bones found");
+                    accDbs.Where(pair => !DistributionEdits[outfit].Any(edit => 
+                        (edit.RedindificiationData is KeyValuePair<int, string> kv) && kv.Key==slot && kv.Value==pair.Key))
+                        .ToList().ForEach(pair => {
+                            DBDE.Logger.LogInfo($"Registering Accessory Dyanmic Bone: {pair.Key}");
+                            DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => getDynamicBone(pair.Key, slot)) { RedindificiationData = new KeyValuePair<int, string>(slot, pair.Key) });
+                        });
                 }
             }
 
@@ -233,13 +269,24 @@ namespace DynamicBoneDistributionEditor
             
         }
 
-        private DynamicBone getDynamicBone(string name, int? slot = null, bool useRootName = true)
+        private DynamicBone getDynamicBone(string name, int? slot = null)
         {
             List<DynamicBone> searchList = new List<DynamicBone>();
-            if (slot.HasValue) searchList = ChaControl.GetAccessoryComponent(slot.Value)?.GetComponentsInChildren<DynamicBone>()?.ToList().FindAll(db => (useRootName ? db.m_Root.name.Equals(name) : db.name.Equals(name)));
-            else searchList = ChaControl.GetComponentsInChildren<DynamicBone>()?.ToList().FindAll(db => (useRootName ? db.m_Root.name.Equals(name) : db.name.Equals(name)) && db.GetComponentsInParent<ChaAccessoryComponent>().IsNullOrEmpty());
+            if (slot.HasValue) searchList = ChaControl.GetAccessoryComponent(slot.Value)?.GetComponentsInChildren<DynamicBone>(true)?
+                    .Where(db => db.TryGetAccessoryQualifiedName(out string n) && n == name && db.m_Root != null)
+                    .Select(db => new KeyValuePair<string, DynamicBone>(db.GetAccessoryQualifiedName(), db))
+                    .GroupBy(pair => pair.Key)
+                    .Select(group => group.First().Value)
+                    .ToList();
 
-            if (searchList.Count > 1) DBDE.Logger.LogWarning($"WARNING: Ambiguous result for dynamic bone with name {name} (usingRootName={useRootName}) and slot {slot}. Using first value in list, this might cause issues!!");
+            else searchList = ChaControl.GetComponentsInChildren<DynamicBone>(true)?
+                    .Where(db => db.GetComponentsInParent<ChaAccessoryComponent>(true).IsNullOrEmpty() && db.TryGetChaControlQualifiedName(out string n) && n == name && db.m_Root != null)
+                    .Select(db => new KeyValuePair<string, DynamicBone>(db.GetChaControlQualifiedName(), db))
+                    .GroupBy(pair => pair.Key)
+                    .Select(group => group.First().Value)
+                    .ToList();
+
+            if (searchList.Count > 1) DBDE.Logger.LogWarning($"WARNING: Ambiguous result for dynamic bone with qualified name {name} and slot {slot}. Using first value in list, this might cause issues!!");
             if (searchList.IsNullOrEmpty()) return null;
             return searchList[0];
         }

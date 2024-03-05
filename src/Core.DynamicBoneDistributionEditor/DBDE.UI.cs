@@ -47,6 +47,24 @@ namespace DynamicBoneDistributionEditor
         public void Open(Func<List<DBDEDynamicBoneEdit>> DBDEGetter)
         {
             this.DBDEGetter = DBDEGetter;
+            currentIndex = 0;
+        }
+
+        void Update()
+        {
+            if (KKAPI.Maker.MakerAPI.InsideAndLoaded && currentEdit.HasValue)
+            {
+                AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>();
+                if (ace != null && ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == true)
+                {
+                    DBDE.Instance.getMakerCursorMangaer().enabled = false;
+                }
+                if (ace != null && !ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == false)
+                {
+                    DBDE.Instance.getMakerCursorMangaer().enabled = true;
+                }
+
+            }
         }
 
         private void OnGUI()
@@ -54,7 +72,7 @@ namespace DynamicBoneDistributionEditor
             if (currentEdit.HasValue) GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
             if (DBDEGetter != null && !DBDEGetter.Invoke().IsNullOrEmpty())
             {
-                windowRect = GUI.Window(5858350, windowRect, WindowFunction, "DBDE - Item", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                windowRect = GUI.Window(5858350, windowRect, WindowFunction, $"DynamicBoneDistributionEditor v{DBDE.Version}", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
             }
             if (currentEdit.HasValue) rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>()?.OnGUI();
         }
@@ -70,31 +88,34 @@ namespace DynamicBoneDistributionEditor
             buttonStyle.alignment = TextAnchor.MiddleCenter;
             GUIStyle BoneButtonStyleEdited = new GUIStyle(GUI.skin.button);
             BoneButtonStyleEdited.normal.textColor = Color.magenta;
+            BoneButtonStyleEdited.hover.textColor = Color.magenta;
             GUIStyle BoneButtonStyleSelected = new GUIStyle(GUI.skin.button);
             BoneButtonStyleSelected.normal.textColor = new Color(255, 145, 0);
+            BoneButtonStyleSelected.hover.textColor = new Color(255, 145, 0);
             GUIStyle HeadStyle = new GUIStyle(GUI.skin.box);
             HeadStyle.alignment = TextAnchor.MiddleCenter;
             GUIStyle LabelStyle = new GUIStyle(GUI.skin.box);
-            LabelStyle.alignment = TextAnchor.MiddleLeft;
+            LabelStyle.alignment = TextAnchor.MiddleCenter;
             GUIStyle LabelStyleEdited = new GUIStyle(LabelStyle);
             LabelStyleEdited.normal.textColor = Color.magenta;
             GUIStyle LableStyleSelected = new GUIStyle(LabelStyle);
-            LabelStyleEdited.normal.textColor = new Color(255, 145, 0);
+            LableStyleSelected.normal.textColor = new Color(255, 145, 0);
             #endregion
             if (GUI.Button(new Rect(windowRect.width - 18, 2, 15, 15), "X", buttonStyle))
             {
                 DBDEGetter = null;
+                return;
             }
 
-            GUI.Box(new Rect(windowRect.position + new Vector2(5, 15), new Vector2(windowRect.width / 7 * 3 + 10, windowRect.height - 20)), "");
-            GUI.Box(new Rect(windowRect.position + new Vector2(5 + (windowRect.width / 7 * 3 + 10), 15), new Vector2(windowRect.width - (windowRect.width / 7 * 3 + 10), windowRect.height - 20)), "");
+            GUI.Box(new Rect(new Vector2(5, 20), new Vector2(windowRect.width / 7 * 3 + 5, windowRect.height - 25)), "");
+            GUI.Box(new Rect(new Vector2(5 + (windowRect.width / 7 * 3 + 5), 20), new Vector2(windowRect.width - (windowRect.width / 7 * 3 + 10)-5, windowRect.height - 25)), "");
 
             List<DBDEDynamicBoneEdit> DBDES = DBDEGetter.Invoke();
 
-            GUILayout.BeginArea(new Rect(new Vector2(10, 20), windowRect.size - new Vector2(20, 25)));
+            GUILayout.BeginArea(new Rect(new Vector2(5, 20), windowRect.size - new Vector2(10, 25)));
             GUILayout.BeginHorizontal();
             #region Left Side
-            LeftSideScroll = GUILayout.BeginScrollView(LeftSideScroll, GUILayout.Width((windowRect.width / 7) * 3)); // width 3/7
+            LeftSideScroll = GUILayout.BeginScrollView(LeftSideScroll, GUILayout.Width((windowRect.width / 7) * 3 + 5)); // width 3/7
             GUILayout.BeginVertical();
             for (int i = 0; i < DBDES.Count; i++)
             {
@@ -112,7 +133,7 @@ namespace DynamicBoneDistributionEditor
             GUILayout.BeginVertical();
             DBDEDynamicBoneEdit Editing = DBDES[currentIndex];
             //Dampening
-            GUILayout.Label(Editing.dynamicBone.m_Root.name);
+            GUILayout.Label(Editing.dynamicBone.m_Root.name, HeadStyle);
             for (int i = 0; i < 5; i++)
             {
                 int num = i;
@@ -152,6 +173,7 @@ namespace DynamicBoneDistributionEditor
                     }
                 }
                 GUILayout.EndHorizontal();
+                GUILayout.Space(5);
             }
             GUILayout.EndVertical();
             #endregion

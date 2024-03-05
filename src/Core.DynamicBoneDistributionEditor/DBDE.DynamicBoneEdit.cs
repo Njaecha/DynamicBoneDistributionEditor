@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using MessagePack;
+using KKAPI.Utilities;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -43,11 +44,11 @@ namespace DynamicBoneDistributionEditor
             this.DynamicBoneAccessor = DynamicBoneAccessor;
 			this.distributions = new DBDEDistribEdit[]
 			{
-				new DBDEDistribEdit(dynamicBone.m_DampingDistrib == null ?getDefaultCurveKeyframes() : dynamicBone.m_DampingDistrib.keys.Length >= 2 ? dynamicBone.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
-				new DBDEDistribEdit(dynamicBone.m_ElasticityDistrib == null ?getDefaultCurveKeyframes() : dynamicBone.m_ElasticityDistrib.keys.Length >= 2 ? dynamicBone.m_ElasticityDistrib.keys : getDefaultCurveKeyframes()),
-				new DBDEDistribEdit(dynamicBone.m_InertDistrib == null ?getDefaultCurveKeyframes() : dynamicBone.m_InertDistrib.keys.Length >= 2 ? dynamicBone.m_InertDistrib.keys : getDefaultCurveKeyframes()),
-				new DBDEDistribEdit(dynamicBone.m_RadiusDistrib == null ?getDefaultCurveKeyframes() : dynamicBone.m_RadiusDistrib.keys.Length >= 2 ? dynamicBone.m_RadiusDistrib.keys : getDefaultCurveKeyframes()),
-				new DBDEDistribEdit(dynamicBone.m_StiffnessDistrib == null ?getDefaultCurveKeyframes() : dynamicBone.m_StiffnessDistrib.keys.Length >= 2 ? dynamicBone.m_StiffnessDistrib.keys : getDefaultCurveKeyframes())
+				new DBDEDistribEdit(dynamicBone?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : dynamicBone.m_DampingDistrib.keys.Length >= 2 ? dynamicBone.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
+				new DBDEDistribEdit(dynamicBone?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : dynamicBone.m_ElasticityDistrib.keys.Length >= 2 ? dynamicBone.m_ElasticityDistrib.keys : getDefaultCurveKeyframes()),
+				new DBDEDistribEdit(dynamicBone?.m_InertDistrib == null ? getDefaultCurveKeyframes() : dynamicBone.m_InertDistrib.keys.Length >= 2 ? dynamicBone.m_InertDistrib.keys : getDefaultCurveKeyframes()),
+				new DBDEDistribEdit(dynamicBone?.m_RadiusDistrib == null ? getDefaultCurveKeyframes() : dynamicBone.m_RadiusDistrib.keys.Length >= 2 ? dynamicBone.m_RadiusDistrib.keys : getDefaultCurveKeyframes()),
+				new DBDEDistribEdit(dynamicBone?.m_StiffnessDistrib == null ? getDefaultCurveKeyframes() : dynamicBone.m_StiffnessDistrib.keys.Length >= 2 ? dynamicBone.m_StiffnessDistrib.keys : getDefaultCurveKeyframes())
 			};
 
 			if (serialised != null)
@@ -131,7 +132,7 @@ namespace DynamicBoneDistributionEditor
                 if (dynamicBone.m_StiffnessDistrib == null) dynamicBone.m_StiffnessDistrib = new AnimationCurve(distributions[4].GetKeyframes());
                 else dynamicBone.m_StiffnessDistrib.SetKeys(distributions[4].GetKeyframes());
             }
-			dynamicBone.SetupParticles();
+			dynamicBone.UpdateDistributions();
 		}
 
         public void Reset(int? kind = null)
@@ -171,7 +172,7 @@ namespace DynamicBoneDistributionEditor
 					e.Reset();
                 }
             }
-            dynamicBone.SetupParticles();
+            dynamicBone.UpdateDistributions();
         }
     }
 }
