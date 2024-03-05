@@ -12,17 +12,35 @@ namespace DynamicBoneDistributionEditor
 		/// 0 - Dampening, 1 - Elasticity, 2 - Intertia, 3 - Radius, 4 - Stiffness
 		/// </summary>
 		public readonly DBDEDistribEdit[] distributions;
-		public readonly DynamicBone dynamicBone;
+		public DynamicBone dynamicBone { get => DynamicBoneAccessor.Invoke(); }
+		internal Func<DynamicBone> AccessorFunciton { get => DynamicBoneAccessor; }
+		private readonly Func<DynamicBone> DynamicBoneAccessor;
 
+		internal object RedindificiationData;
+		
 
 		private Keyframe[] getDefaultCurveKeyframes()
 		{
 			return new Keyframe[2] { new Keyframe(0f, 1f), new Keyframe(1f, 1f) };
 		}
 
-		public DBDEDynamicBoneEdit(DynamicBone dynamicBone, byte[] serialised = null)
+		public DBDEDynamicBoneEdit(Func<DynamicBone> DynamicBoneAccessor, DBDEDynamicBoneEdit copyFrom)
 		{
-			this.dynamicBone = dynamicBone;
+            this.DynamicBoneAccessor = DynamicBoneAccessor;
+            this.distributions = new DBDEDistribEdit[]
+            {
+                new DBDEDistribEdit(copyFrom.distributions[0].GetKeyframes()),
+                new DBDEDistribEdit(copyFrom.distributions[1].GetKeyframes()),
+                new DBDEDistribEdit(copyFrom.distributions[2].GetKeyframes()),
+                new DBDEDistribEdit(copyFrom.distributions[3].GetKeyframes()),
+                new DBDEDistribEdit(copyFrom.distributions[4].GetKeyframes())
+            };
+			Apply();
+        }
+
+		public DBDEDynamicBoneEdit(Func<DynamicBone> DynamicBoneAccessor, byte[] serialised = null)
+		{
+            this.DynamicBoneAccessor = DynamicBoneAccessor;
 			this.distributions = new DBDEDistribEdit[]
 			{
 				new DBDEDistribEdit(dynamicBone.m_DampingDistrib == null ?getDefaultCurveKeyframes() : dynamicBone.m_DampingDistrib.keys.Length >= 2 ? dynamicBone.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
@@ -60,6 +78,15 @@ namespace DynamicBoneDistributionEditor
 				.ToDictionary(x => x.Key, x => x.Value);
 
             return MessagePackSerializer.Serialize(edits);
+		}
+
+		public bool IsEdited()
+		{
+			foreach (var d in distributions)
+			{
+				if (d.HasEdits) return true;
+			}
+			return false;
 		}
 
 		public void Apply(int? kind = null)
