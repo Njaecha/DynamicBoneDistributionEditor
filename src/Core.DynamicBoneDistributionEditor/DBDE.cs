@@ -154,22 +154,27 @@ namespace DynamicBoneDistributionEditor
                     {
                         particle.m_Damping = dynamicBone.m_Damping * dynamicBone.m_DampingDistrib.Evaluate(time);
                     }
+                    else particle.m_Damping = dynamicBone.m_Damping;
                     if (dynamicBone.m_ElasticityDistrib != null && dynamicBone.m_ElasticityDistrib.keys.Length != 0)
                     {
                         particle.m_Elasticity = dynamicBone.m_Elasticity * dynamicBone.m_ElasticityDistrib.Evaluate(time);
                     }
+                    else particle.m_Elasticity = dynamicBone.m_Elasticity;
                     if (dynamicBone.m_StiffnessDistrib != null && dynamicBone.m_StiffnessDistrib.keys.Length != 0)
                     {
                         particle.m_Stiffness = dynamicBone.m_Stiffness * dynamicBone.m_StiffnessDistrib.Evaluate(time);
                     }
+                    else particle.m_Stiffness = dynamicBone.m_Stiffness;
                     if (dynamicBone.m_InertDistrib != null && dynamicBone.m_InertDistrib.keys.Length != 0)
                     {
                         particle.m_Inert = dynamicBone.m_Inert * dynamicBone.m_InertDistrib.Evaluate(time);
                     }
+                    else particle.m_Inert = dynamicBone.m_Inert;
                     if (dynamicBone.m_RadiusDistrib != null && dynamicBone.m_RadiusDistrib.keys.Length != 0)
                     {
                         particle.m_Radius = dynamicBone.m_Radius * dynamicBone.m_RadiusDistrib.Evaluate(time);
                     }
+                    else particle.m_Radius = dynamicBone.m_Radius;
                 }
                 particle.m_Damping = Mathf.Clamp01(particle.m_Damping);
                 particle.m_Elasticity = Mathf.Clamp01(particle.m_Elasticity);

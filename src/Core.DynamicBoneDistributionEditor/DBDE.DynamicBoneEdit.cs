@@ -24,7 +24,8 @@ namespace DynamicBoneDistributionEditor
         public EditableValue<Vector3> force;
         public EditableValue<DynamicBone.FreezeAxis> freezeAxis;
 
-        public readonly bool active;
+        private bool _active;
+        public bool active {get => _active; set => SetActive(value); }
  
 		public DynamicBone dynamicBone { get => DynamicBoneAccessor.Invoke(); }
 		internal Func<DynamicBone> AccessorFunciton { get => DynamicBoneAccessor; }
@@ -32,6 +33,12 @@ namespace DynamicBoneDistributionEditor
 
 		internal object RedindificiationData;
 		
+        internal string GetButtonName()
+        {
+            string n = "";
+            if (RedindificiationData is KeyValuePair<int, string> kvp) n = $"Slot {kvp.Key} - ";
+            return n + dynamicBone.m_Root.name;
+        }
 
 		private Keyframe[] getDefaultCurveKeyframes()
 		{
@@ -49,6 +56,8 @@ namespace DynamicBoneDistributionEditor
             this.gravity = copyFrom.gravity;
             this.force = copyFrom.force;
 
+            this.SetActive(copyFrom.active);
+
             ApplyDistribution();
             ApplyBaseValues();
         }
@@ -65,6 +74,7 @@ namespace DynamicBoneDistributionEditor
 		{
             this.DynamicBoneAccessor = DynamicBoneAccessor;
 			DynamicBone db = dynamicBone;
+            _active = db.enabled;
 			this.distributions = new EditableValue<Keyframe[]>[]
 			{
 				new EditableValue<Keyframe[]>(db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
@@ -82,22 +92,35 @@ namespace DynamicBoneDistributionEditor
 				new EditableValue<float>(db.m_Stiffness)
 			};
 
-
 			if (serialised != null)
 			{
-                KeyValuePair<Dictionary<byte, Keyframe[]>, Dictionary<byte, float>> edits = MessagePackSerializer.Deserialize<KeyValuePair<Dictionary<byte, Keyframe[]>, Dictionary<byte, float>>>(serialised);
-				var distribs = edits.Key;
+                List<byte[]> edits = MessagePackSerializer.Deserialize<List<byte[]>>(serialised);
+                if (edits.Count != 6) return;
+				var distribs = MessagePackSerializer.Deserialize<Dictionary<byte, Keyframe[]>>(edits[0]);
 				foreach (byte i in distribs.Keys)
 				{
-                    distributions[i] = distribs[i];
+                    distributions[i] = (EditableValue<Keyframe[]>)distribs[i];
 				}
-                var bValue = edits.Value;
+                var bValue = MessagePackSerializer.Deserialize<Dictionary<byte, float>>(edits[1]);
                 foreach (byte i in bValue.Keys)
                 {
-                    baseValues[i] = bValue[i];
+                    baseValues[i] = (EditableValue<float>)bValue[i];
                 }
+                var sGravity = MessagePackSerializer.Deserialize<Vector3>(edits[2]);
+                if (sGravity != null) gravity = (EditableValue<Vector3>)sGravity;
+                var sForce = MessagePackSerializer.Deserialize<Vector3>(edits[3]);
+                if (sForce != null) force = (EditableValue<Vector3>)sForce;
+                var sAxis = MessagePackSerializer.Deserialize<byte?>(edits[4]);
+                if (sAxis.HasValue) freezeAxis = (EditableValue<DynamicBone.FreezeAxis>)(DynamicBone.FreezeAxis)sAxis;
+                SetActive(MessagePackSerializer.Deserialize<bool>(edits[5]));
             }
 		}
+
+        public void SetActive(bool active)
+        {
+            dynamicBone.enabled = active;
+            _active = active;
+        }
 
 		public AnimationCurve GetAnimationCurve(byte kind)
 		{ 
@@ -106,7 +129,7 @@ namespace DynamicBoneDistributionEditor
 
         public void SetAnimationCurve(int kind, AnimationCurve animationCurve)
 		{
-			distributions[kind] = animationCurve.keys;
+			distributions[kind].value = animationCurve.keys;
 		}
 
 		public byte[] Sersialise()
@@ -115,13 +138,39 @@ namespace DynamicBoneDistributionEditor
 				.Where(t => t.IsEdited)
 				.Select((t, i) => new KeyValuePair<byte, Keyframe[]>((byte)i, t))
 				.ToDictionary(x => x.Key, x => x.Value);
+            byte[] sDistrib = MessagePackSerializer.Serialize(distributions);
 			Dictionary<byte, float> bValues = baseValues
 				.Where(v => v.IsEdited)
 				.Select((v, i) => new KeyValuePair<byte, float>((byte)i, v))
 				.ToDictionary(x => x.Key, x => x.Value);
-			KeyValuePair<Dictionary<byte, Keyframe[]>, Dictionary<byte, float>> edits = new KeyValuePair<Dictionary<byte, Keyframe[]>, Dictionary<byte, float>>(distribs, bValues);
+            byte[] sBaseValues = MessagePackSerializer.Serialize(baseValues);
+            byte[] sGravtiy = null;
+            if (gravity.IsEdited)
+            {
+                sGravtiy = MessagePackSerializer.Serialize(gravity.value);
+            }
+            byte[] sFroce = null;
+            if (force.IsEdited)
+            {
+                sFroce = MessagePackSerializer.Serialize(force.value);
+            }
+            byte[] sAxis = null;
+            if (freezeAxis.IsEdited)
+            {
+                sAxis = MessagePackSerializer.Serialize(((byte?)freezeAxis.value));
+            }
+            byte[] sActive = MessagePackSerializer.Serialize(active);
+
+            List<byte[]> edits = new List<byte[]>() {sDistrib, sBaseValues, sGravtiy, sFroce, sAxis, sActive };
             return MessagePackSerializer.Serialize(edits);
 		}
+
+        public bool IsEdited(int kind)
+        {
+            if (distributions[kind].IsEdited) return true;
+            if (baseValues[kind].IsEdited) return true;
+            return false;
+        }
 
 		public bool IsEdited()
 		{
@@ -129,6 +178,13 @@ namespace DynamicBoneDistributionEditor
 			{
 				if (d.IsEdited) return true;
 			}
+            foreach (var d in baseValues)
+            {
+                if (d.IsEdited) return true;
+            }
+            if (gravity.IsEdited) return true;
+            if (force.IsEdited) return true;
+            if (freezeAxis.IsEdited) return true;
 			return false;
 		}
 

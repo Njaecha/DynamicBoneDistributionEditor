@@ -1,6 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\Core.DynamicBoneDistributionEditor\Core.DynamicBoneDistributionEditor.projitems" Label="Shared" Condition="Exists('..\Core.DynamicBoneDistributionEditor\Core.DynamicBoneDistributionEditor.projitems')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -114,6 +113,7 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <Import Project="..\Core.DynamicBoneDistributionEditor\Core.DynamicBoneDistributionEditor.projitems" Label="Shared" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\packages\IllusionLibs.BepInEx.Harmony.2.9.0\build\IllusionLibs.BepInEx.Harmony.targets" Condition="Exists('..\packages\IllusionLibs.BepInEx.Harmony.2.9.0\build\IllusionLibs.BepInEx.Harmony.targets')" />
   <Import Project="..\packages\IllusionLibs.KoikatsuSunshine.Assembly-CSharp-firstpass.2021.9.17\build\IllusionLibs.KoikatsuSunshine.Assembly-CSharp-firstpass.targets" Condition="Exists('..\packages\IllusionLibs.KoikatsuSunshine.Assembly-CSharp-firstpass.2021.9.17\build\IllusionLibs.KoikatsuSunshine.Assembly-CSharp-firstpass.targets')" />

@@ -5,7 +5,7 @@ namespace DynamicBoneDistributionEditor
 {
     public struct EditableValue<T>
     {
-        private T _orgValue;
+        private readonly T _orgValue;
         private T _value;
         private bool _edited;
 
@@ -18,18 +18,22 @@ namespace DynamicBoneDistributionEditor
             }
             set
             {
-                // maybe custom comparison for the used types
-                if (_orgValue.Equals(value)) return;
-                this._value = value;
                 this._edited = true;
+                // maybe add custom comparison for the used types
+                if (_orgValue.Equals(value))
+                {
+                    this._edited = false;
+                }
+                this._value = value;
             }
         }
 
-        public bool IsEdited { get => IsEdited; }
+        public bool IsEdited { get => _edited; }
 
         public EditableValue(T v)
         {
             this._orgValue = v;
+            this._value = v;
             this._edited = false;
         }
 
@@ -43,7 +47,7 @@ namespace DynamicBoneDistributionEditor
             return v.value;
         }
 
-        public static implicit operator EditableValue<T>(T v)
+        public static explicit operator EditableValue<T>(T v)
         {
             return new EditableValue<T>(v);
         }
