@@ -186,8 +186,8 @@ namespace DynamicBoneDistributionEditor
             {
                 int num = i;
                 GUILayout.BeginHorizontal();
-                GUI.color = currentEdit == num ? Color.cyan : Editing.distributions[num].edited ? Color.magenta : guic;
-                GUILayout.Label(DistribKindNames[i] + (Editing.distributions[num].edited ? "*" : ""), LabelStyle,GUILayout.Width((windowRect.width / 6))); // width 1/6
+                GUI.color = currentEdit == num ? Color.cyan : Editing.distributions[num].IsEdited ? Color.magenta : guic;
+                GUILayout.Label(DistribKindNames[i] + (Editing.distributions[num].IsEdited ? "*" : ""), LabelStyle,GUILayout.Width((windowRect.width / 6))); // width 1/6
                 GUI.color = guic;
                 #region Inputs
                 GUILayout.BeginVertical(); // two rows
