@@ -16,7 +16,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.SceneController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.CharaController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.DynamicBoneEdit.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)DBDE.DistribEdit.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.UI.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)EditableValue.cs" />
   </ItemGroup>
 </Project>

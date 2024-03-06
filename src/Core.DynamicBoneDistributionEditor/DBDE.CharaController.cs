@@ -121,7 +121,8 @@ namespace DynamicBoneDistributionEditor
             if (!DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType)) return;
             foreach(var x in DistributionEdits[ChaControl.fileStatus.coordinateType])
             {
-                x.Apply();
+                x.ApplyDistribution();
+                x.ApplyBaseValues();
             }
         }
 

@@ -40,7 +40,7 @@ namespace DynamicBoneDistributionEditor
                 }
             }
             // Apply Edits on all DBs 
-            DistributionEdits.Values.ToList().ForEach(x => x.ForEach(y => y.Apply()));
+            DistributionEdits.Values.ToList().ForEach(x => x.ForEach(y => { y.ApplyDistribution(); y.ApplyBaseValues(); }));
         }
 
         protected override void OnSceneSave()

@@ -28,7 +28,7 @@ namespace DynamicBoneDistributionEditor
 
         internal static DBDEUI UI;
 
-        private SidebarToggle toggle;
+        internal static SidebarToggle toggle;
 
         void Awake()
         {
@@ -39,9 +39,9 @@ namespace DynamicBoneDistributionEditor
 
             UI = this.GetOrAddComponent<DBDEUI>();
 
-            KKAPI.Maker.AccessoriesApi.AccessoryKindChanged += AccessoryKindChanged;
-            KKAPI.Maker.AccessoriesApi.AccessoriesCopied += AccessoryCopied;
-            KKAPI.Maker.AccessoriesApi.AccessoryTransferred += AccessoryTransferred;
+            AccessoriesApi.AccessoryKindChanged += AccessoryKindChanged;
+            AccessoriesApi.AccessoriesCopied += AccessoryCopied;
+            AccessoriesApi.AccessoryTransferred += AccessoryTransferred;
 
             Harmony.CreateAndPatchAll(typeof(DBDEHooks));
 
@@ -58,28 +58,28 @@ namespace DynamicBoneDistributionEditor
         private void createSideBarToggle(object sender, RegisterCustomControlsEvent e)
         {
             toggle = e.AddSidebarControl(new SidebarToggle("DynamicBone Distribution Edit", false, this));
-            toggle.ValueChanged.Subscribe(b => toggleEvent(b));
+            toggle.ValueChanged.Subscribe(toggleEvent);
         }
 
-        private void AccessoryTransferred(object sender, KKAPI.Maker.AccessoryTransferEventArgs e)
+        private void AccessoryTransferred(object sender, AccessoryTransferEventArgs e)
         {
             int dSlot = e.DestinationSlotIndex;
             int sSlot = e.SourceSlotIndex;
-            KKAPI.Maker.MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryTransferedEvent(sSlot, dSlot);
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryTransferedEvent(sSlot, dSlot);
         }
 
-        private void AccessoryCopied(object sender, KKAPI.Maker.AccessoryCopyEventArgs e)
+        private void AccessoryCopied(object sender, AccessoryCopyEventArgs e)
         {
             ChaFileDefine.CoordinateType dType = e.CopyDestination;
             ChaFileDefine.CoordinateType sType = e.CopySource;
             IEnumerable<int> slots = e.CopiedSlotIndexes;
-            KKAPI.Maker.MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryCopiedEvent((int)sType, (int)dType, slots);
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryCopiedEvent((int)sType, (int)dType, slots);
         }
 
-        private void AccessoryKindChanged(object sender, KKAPI.Maker.AccessorySlotEventArgs e)
+        private void AccessoryKindChanged(object sender, AccessorySlotEventArgs e)
         {
             int slot = e.SlotIndex;
-            KKAPI.Maker.MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryChangedEvent(slot);
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryChangedEvent(slot);
         }
 
         internal CursorManager getMakerCursorMangaer()
