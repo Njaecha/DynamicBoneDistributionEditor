@@ -36,7 +36,7 @@ namespace DynamicBoneDistributionEditor
         internal string GetButtonName()
         {
             string n = "";
-            if (RedindificiationData is KeyValuePair<int, string> kvp) n = $"Slot {kvp.Key} - ";
+            if (RedindificiationData is KeyValuePair<int, string> kvp) n = $"Slot {kvp.Key+1} - ";
             return n + dynamicBone.m_Root.name;
         }
 
@@ -49,8 +49,8 @@ namespace DynamicBoneDistributionEditor
         {
             for (int i = 0; i < 5; i++)
             {
-                this.distributions[i] = new EditableValue<Keyframe[]>(copyFrom.distributions[i]);
-                this.baseValues[i] = new EditableValue<float>(copyFrom.baseValues[i]);    
+                this.distributions[i] = copyFrom.distributions[i];
+                this.baseValues[i] = copyFrom.baseValues[i];
             }
             this.freezeAxis = copyFrom.freezeAxis;
             this.gravity = copyFrom.gravity;
@@ -60,13 +60,37 @@ namespace DynamicBoneDistributionEditor
 
             ApplyDistribution();
             ApplyBaseValues();
+            ApplyGravity();
+            ApplyForce();
+            ApplyFreezeAxis();
         }
 
 		public DBDEDynamicBoneEdit(Func<DynamicBone> DynamicBoneAccessor, DBDEDynamicBoneEdit copyFrom)
 		{
             this.DynamicBoneAccessor = DynamicBoneAccessor;
-            this.distributions = new EditableValue<Keyframe[]>[5];
-            this.baseValues = new EditableValue<float>[5];
+            DynamicBone db = dynamicBone;
+            _active = db.enabled;
+            this.distributions = new EditableValue<Keyframe[]>[]
+            {
+                new EditableValue<Keyframe[]>(db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_InertDistrib == null ? getDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : getDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_RadiusDistrib == null ? getDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : getDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_StiffnessDistrib == null ? getDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : getDefaultCurveKeyframes())
+            };
+            this.baseValues = new EditableValue<float>[]
+            {
+                new EditableValue<float>(db.m_Damping),
+                new EditableValue<float>(db.m_Elasticity),
+                new EditableValue<float>(db.m_Inert),
+                new EditableValue<float>(db.m_Radius),
+                new EditableValue<float>(db.m_Stiffness)
+            };
+
+            gravity = new EditableValue<Vector3>(db.m_Gravity);
+            force = new EditableValue<Vector3>(db.m_Force);
+            freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
+
             PasteData(copyFrom);
         }
 
@@ -91,6 +115,10 @@ namespace DynamicBoneDistributionEditor
 				new EditableValue<float>(db.m_Radius),
 				new EditableValue<float>(db.m_Stiffness)
 			};
+
+            gravity = new EditableValue<Vector3>(db.m_Gravity);
+            force = new EditableValue<Vector3>(db.m_Force);
+            freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
 
 			if (serialised != null)
 			{
@@ -138,12 +166,12 @@ namespace DynamicBoneDistributionEditor
 				.Where(t => t.IsEdited)
 				.Select((t, i) => new KeyValuePair<byte, Keyframe[]>((byte)i, t))
 				.ToDictionary(x => x.Key, x => x.Value);
-            byte[] sDistrib = MessagePackSerializer.Serialize(distributions);
+            byte[] sDistrib = MessagePackSerializer.Serialize(distribs);
 			Dictionary<byte, float> bValues = baseValues
 				.Where(v => v.IsEdited)
 				.Select((v, i) => new KeyValuePair<byte, float>((byte)i, v))
 				.ToDictionary(x => x.Key, x => x.Value);
-            byte[] sBaseValues = MessagePackSerializer.Serialize(baseValues);
+            byte[] sBaseValues = MessagePackSerializer.Serialize(bValues);
             byte[] sGravtiy = null;
             if (gravity.IsEdited)
             {
@@ -164,6 +192,47 @@ namespace DynamicBoneDistributionEditor
             List<byte[]> edits = new List<byte[]>() {sDistrib, sBaseValues, sGravtiy, sFroce, sAxis, sActive };
             return MessagePackSerializer.Serialize(edits);
 		}
+
+        ///<summary></summary>
+        /// <param name="axis">X=0, Y=1, Z=2</param>
+        public bool IsGravityEdited(int? axis = null)
+        {
+            if (axis.HasValue)
+            {
+                switch (axis.Value)
+                {
+                    case 0:
+                        return gravity.value.x != gravity.initialValue.x;
+                    case 1:
+                        return gravity.value.y != gravity.initialValue.y;
+                    case 2:
+                        return gravity.value.z != gravity.initialValue.z;
+                    default:
+                        return false;
+                }
+            }
+            else return gravity.IsEdited;
+        }
+        ///<summary></summary>
+        /// <param name="axis">X=0, Y=1, Z=2</param>
+        public bool IsForceEdited(int? axis = null)
+        {
+            if (axis.HasValue)
+            {
+                switch (axis.Value)
+                {
+                    case 0:
+                        return force.value.x != force.initialValue.x;
+                    case 1:
+                        return force.value.y != force.initialValue.y;
+                    case 2:
+                        return force.value.z != force.initialValue.z;
+                    default:
+                        return false;
+                }
+            }
+            else return force.IsEdited;
+        }
 
         public bool IsEdited(int kind)
         {
@@ -240,37 +309,36 @@ namespace DynamicBoneDistributionEditor
             if (kind.HasValue)
             {
                 distributions[kind.Value].Reset();
-                Keyframe[] keys = distributions[kind.Value];
+                Keyframe[] keys = distributions[kind.Value].value;
                 switch (kind.Value)
                 {
                     case 0:
-                        db.m_DampingDistrib.SetKeys(keys);
+                        db.m_DampingDistrib?.SetKeys(keys);
                         break;
                     case 1:
-                        db.m_ElasticityDistrib.SetKeys(keys);
+                        db.m_ElasticityDistrib?.SetKeys(keys);
                         break;
                     case 2:
-                        db.m_InertDistrib.SetKeys(keys);
+                        db.m_InertDistrib?.SetKeys(keys);
                         break;
                     case 3:
-                        db.m_RadiusDistrib.SetKeys(keys);
+                        db.m_RadiusDistrib?.SetKeys(keys);
                         break;
                     case 4:
-                        db.m_StiffnessDistrib.SetKeys(keys);
+                        db.m_StiffnessDistrib?.SetKeys(keys);
                         break;
                 }
-				distributions[kind.Value].Reset();
             }
             else
             {
-                distributions.ToList().ForEach(e => e.Reset());
-                db.m_DampingDistrib.SetKeys(distributions[0]);
-                db.m_ElasticityDistrib.SetKeys(distributions[1]);
-                db.m_InertDistrib.SetKeys(distributions[2]);
-                db.m_RadiusDistrib.SetKeys(distributions[3]);
-                db.m_StiffnessDistrib.SetKeys(distributions[4]);
+                foreach (var d in distributions) d.Reset();
+                db.m_DampingDistrib?.SetKeys(distributions[0]);
+                db.m_ElasticityDistrib?.SetKeys(distributions[1]);
+                db.m_InertDistrib?.SetKeys(distributions[2]);
+                db.m_RadiusDistrib?.SetKeys(distributions[3]);
+                db.m_StiffnessDistrib?.SetKeys(distributions[4]);
             }
-            dynamicBone.UpdateParticles();
+            db.UpdateParticles();
         }
 
         public void ApplyBaseValues(int? kind = null)
@@ -315,7 +383,7 @@ namespace DynamicBoneDistributionEditor
             if (kind.HasValue)
             {
                 baseValues[kind.Value].Reset();
-                float value = baseValues[kind.Value];
+                float value = baseValues[kind.Value].value;
                 switch (kind.Value)
                 {
                     case 0:
@@ -337,7 +405,7 @@ namespace DynamicBoneDistributionEditor
             }
             else
             {
-                baseValues.ToList().ForEach(e => e.Reset());
+                foreach (var b in baseValues) b.Reset();
                 db.m_Damping = baseValues[0];
                 db.m_Elasticity = baseValues[1];
                 db.m_Inert = baseValues[2];

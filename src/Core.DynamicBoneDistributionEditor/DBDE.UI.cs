@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using ADV.Commands.Base;
-using Cysharp.Threading.Tasks.Linq;
 using UnityEngine;
-using static ActionData.PersonalityMoveData;
 using static AnimationCurveEditor.AnimationCurveEditor;
 using static Illusion.Utils;
 
@@ -12,6 +10,8 @@ namespace DynamicBoneDistributionEditor
 	public class DBDEUI : MonoBehaviour
 	{
         private const int COPYBUTTONWIDTH = 55;
+        private const float VSLIDERMIN = -0.03f;
+        private const float VSLIDERMAX = 0.03f;
 
         /// <summary>
         /// Function used to get DB List with Key
@@ -99,6 +99,7 @@ namespace DynamicBoneDistributionEditor
                 windowRect = GUI.Window(5858350, windowRect, WindowFunction, $"DynamicBoneDistributionEditor v{DBDE.Version}", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
             }
             if (currentEdit.HasValue) rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>()?.OnGUI();
+            
         }
 
         private Rect lastUsedAceRect = new Rect(Screen.width / 2, Screen.height / 2, 500, 300);
@@ -160,7 +161,6 @@ namespace DynamicBoneDistributionEditor
             HeadStyle.alignment = TextAnchor.MiddleCenter;
             GUIStyle LabelStyle = new GUIStyle(GUI.skin.box);
             LabelStyle.alignment = TextAnchor.MiddleCenter;
-            LabelStyle.fontSize = 15;
             Color guic = GUI.color;
             #endregion
 
@@ -205,8 +205,9 @@ namespace DynamicBoneDistributionEditor
             }
             GUILayout.EndHorizontal();
             #endregion
-            #region Right Side - BaseValue/Distribution
+
             RightSideScroll = GUILayout.BeginScrollView(RightSideScroll);
+            #region Right Side - BaseValue/Distribution
             for (int i = 0; i < 5; i++) // for "Damping", "Elasticity", "Interia", "Radius", "Stiffness"
             {
                 int num = i;
@@ -231,7 +232,7 @@ namespace DynamicBoneDistributionEditor
                 }
                 if (Clipboard != null)
                 {
-                    if (Clipboard.data is float value) // draw paste button
+                    if (Clipboard.data is float value && Clipboard.distribIndex != -2) // draw paste button
                     {
                         string tooltipValue = value.ToString("0.000");
                         if (GUILayout.Button(new GUIContent("Paste", $"Paste Value: {tooltipValue}"), GUILayout.Width(COPYBUTTONWIDTH)))
@@ -324,7 +325,10 @@ namespace DynamicBoneDistributionEditor
             #region Right Side - Gravity
             GUILayout.BeginHorizontal();
             // == top row ==
-            GUILayout.Label("Gravity" + (Editing.gravity.IsEdited ? "*" : ""), LabelStyle , GUILayout.Width(windowRect.width / 6));
+            #region Gravtiy Top
+            if (Editing.IsGravityEdited()) GUI.color = Color.magenta;
+            GUILayout.Label("Gravity" + (Editing.IsGravityEdited() ? "*" : ""), LabelStyle , GUILayout.Width(windowRect.width / 6));
+            GUI.color = guic;
             if (gravityWrapper.Active) // draw accept button
             {
                 GUI.color = Color.green;
@@ -336,10 +340,8 @@ namespace DynamicBoneDistributionEditor
             }
             else // draw value button
             {
-                string vX = Editing.gravity.value.x.ToString("0.000");
-                string vY = Editing.gravity.value.y.ToString("0.000");
-                string vZ = Editing.gravity.value.z.ToString("0.000");
-                if (GUILayout.Button(new GUIContent($"X={vX} | Y={vY} | Z={vZ}", "Gravity Vector. Click to edit!")))
+                string tooltipText = Editing.gravity.value.ToString("F3");
+                if (GUILayout.Button(new GUIContent($"{tooltipText}", "Gravity Vector. Click to edit!")))
                 {
                     gravityWrapper.Activte(Editing.gravity.value);
                 }
@@ -367,7 +369,7 @@ namespace DynamicBoneDistributionEditor
                     Clipboard = new ClipboardEntry(currentIndex, 0, Editing.gravity.value);
                 }
             }
-            if (Editing.gravity.IsEdited) GUI.color = Color.magenta;
+            if (Editing.IsGravityEdited()) GUI.color = Color.magenta;
             else GUI.enabled = false;
             if (GUILayout.Button(new GUIContent("R", $"Reset Gravity"), GUILayout.Width(25)))
             {
@@ -377,15 +379,19 @@ namespace DynamicBoneDistributionEditor
             GUI.enabled = true;
             GUI.color = guic;
             GUILayout.EndHorizontal();
+            #endregion
             // == sliders ==
             if (gravityWrapper.Active)
             {
-                GUILayout.BeginHorizontal();
                 #region Gravity Sliders X
-                GUILayout.Label("X:", LabelStyle, GUILayout.Width(25));
+                GUILayout.BeginHorizontal();
+                if (Editing.IsGravityEdited(0)) GUI.color = Color.magenta;
+                GUILayout.Label($"X:", LabelStyle, GUILayout.Width(25));
+                GUI.color = guic;
+                gravityWrapper.TextX = GUILayout.TextField(gravityWrapper.TextX, GUILayout.Width(60));
                 gravityWrapper.ValueX = GUILayout.HorizontalSlider(gravityWrapper.ValueX,
-                    gravityWrapper.ValueX < -5 ? gravityWrapper.ValueX : -5,
-                    gravityWrapper.ValueX > 5 ? gravityWrapper.ValueX : 5);
+                    gravityWrapper.ValueX < VSLIDERMIN ? gravityWrapper.ValueX : VSLIDERMIN,
+                    gravityWrapper.ValueX > VSLIDERMAX ? gravityWrapper.ValueX : VSLIDERMAX);
                 if (Clipboard != null)
                 {
                     if (Clipboard.data is float value && Clipboard.distribIndex == -2) // draw paste button
@@ -408,17 +414,25 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -2, gravityWrapper.ValueX);
                     }
                 }
+                if (Editing.IsGravityEdited(0)) GUI.color = Color.magenta;
+                else GUI.enabled = false;
                 if (GUILayout.Button(new GUIContent("R", $"Reset X"), GUILayout.Width(25)))
                 {
                     gravityWrapper.ValueX = Editing.gravity.initialValue.x;
+
                 }
+                GUI.enabled = true; GUI.color = guic;
+                GUILayout.EndHorizontal();
                 #endregion
                 #region Gravity Sliders Y
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Y:", LabelStyle, GUILayout.Width(25));
+                if (Editing.IsGravityEdited(1)) GUI.color = Color.magenta;
+                GUILayout.Label($"Y:", LabelStyle, GUILayout.Width(25));
+                GUI.color = guic;
+                gravityWrapper.TextY = GUILayout.TextField(gravityWrapper.TextY, GUILayout.Width(60));
                 gravityWrapper.ValueY = GUILayout.HorizontalSlider(gravityWrapper.ValueY,
-                    gravityWrapper.ValueY < -5 ? gravityWrapper.ValueY : -5,
-                    gravityWrapper.ValueY > 5 ? gravityWrapper.ValueY : 5);
+                    gravityWrapper.ValueY < VSLIDERMIN ? gravityWrapper.ValueY : VSLIDERMIN,
+                    gravityWrapper.ValueY > VSLIDERMAX ? gravityWrapper.ValueY : VSLIDERMAX);
                 if (Clipboard != null)
                 {
                     if (Clipboard.data is float value && Clipboard.distribIndex == -2) // draw paste button
@@ -441,17 +455,24 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -2, gravityWrapper.ValueY);
                     }
                 }
+                if (Editing.IsGravityEdited(1)) GUI.color = Color.magenta;
+                else GUI.enabled = false;
                 if (GUILayout.Button(new GUIContent("R", $"Reset Y"), GUILayout.Width(25)))
                 {
                     gravityWrapper.ValueY = Editing.gravity.initialValue.y;
                 }
+                GUI.enabled = true; GUI.color = guic;
+                GUILayout.EndHorizontal();
                 #endregion
                 #region Gravity Sliders Z
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Z:", LabelStyle, GUILayout.Width(25));
+                if (Editing.IsGravityEdited(2)) GUI.color = Color.magenta;
+                GUILayout.Label($"Z:", LabelStyle, GUILayout.Width(25));
+                GUI.color = guic;
+                gravityWrapper.TextZ = GUILayout.TextField(gravityWrapper.TextZ, GUILayout.Width(60));
                 gravityWrapper.ValueZ = GUILayout.HorizontalSlider(gravityWrapper.ValueZ,
-                    gravityWrapper.ValueZ < -5 ? gravityWrapper.ValueZ : -5,
-                    gravityWrapper.ValueZ > 5 ? gravityWrapper.ValueZ : 5);
+                    gravityWrapper.ValueZ < VSLIDERMIN ? gravityWrapper.ValueZ : VSLIDERMIN,
+                    gravityWrapper.ValueZ > VSLIDERMAX ? gravityWrapper.ValueZ : VSLIDERMAX);
                 if (Clipboard != null)
                 {
                     if (Clipboard.data is float value && Clipboard.distribIndex == -2) // draw paste button
@@ -474,18 +495,25 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -2, gravityWrapper.ValueZ);
                     }
                 }
+                if (Editing.IsGravityEdited(2)) GUI.color = Color.magenta;
+                else GUI.enabled = false;
                 if (GUILayout.Button(new GUIContent("R", $"Reset Z"), GUILayout.Width(25)))
                 {
                     gravityWrapper.ValueZ = Editing.gravity.initialValue.z;
                 }
-                #endregion
+                GUI.enabled = true; GUI.color = guic;
                 GUILayout.EndHorizontal();
+                #endregion
             }
             #endregion
+            GUILayout.Space(5);
             #region Right Side - Force
             GUILayout.BeginHorizontal();
+            #region Force Top
             // == top row ==
-            GUILayout.Label("Force" + (Editing.force.IsEdited ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6));
+            if (Editing.IsForceEdited()) GUI.color = Color.magenta;
+            GUILayout.Label("Force" + (Editing.IsForceEdited() ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6));
+            GUI.color = guic;
             if (forceWrapper.Active) // draw accept button
             {
                 GUI.color = Color.green;
@@ -497,10 +525,8 @@ namespace DynamicBoneDistributionEditor
             }
             else // draw value button
             {
-                string vX = Editing.force.value.x.ToString("0.000");
-                string vY = Editing.force.value.y.ToString("0.000");
-                string vZ = Editing.force.value.z.ToString("0.000");
-                if (GUILayout.Button(new GUIContent($"X={vX} | Y={vY} | Z={vZ}", "Force Vector. Click to edit!")))
+                string tooltipText = Editing.force.value.ToString("F3");
+                if (GUILayout.Button(new GUIContent($"{tooltipText}", "Force Vector. Click to edit!")))
                 {
                     forceWrapper.Activte(Editing.force.value);
                 }
@@ -528,7 +554,7 @@ namespace DynamicBoneDistributionEditor
                     Clipboard = new ClipboardEntry(currentIndex, 0, Editing.force.value);
                 }
             }
-            if (Editing.force.IsEdited) GUI.color = Color.magenta;
+            if (Editing.IsForceEdited()) GUI.color = Color.magenta;
             else GUI.enabled = false;
             if (GUILayout.Button(new GUIContent("R", $"Reset Force"), GUILayout.Width(25)))
             {
@@ -538,15 +564,19 @@ namespace DynamicBoneDistributionEditor
             GUI.enabled = true;
             GUI.color = guic;
             GUILayout.EndHorizontal();
+            #endregion
             // == sliders ==
             if (forceWrapper.Active)
             {
-                GUILayout.BeginHorizontal();
                 #region Force Sliders X
-                GUILayout.Label("X:", LabelStyle, GUILayout.Width(25));
+                GUILayout.BeginHorizontal();
+                if (Editing.IsForceEdited(0)) GUI.color = Color.magenta;
+                GUILayout.Label($"X:", LabelStyle, GUILayout.Width(25));
+                GUI.color = guic;
+                forceWrapper.TextX = GUILayout.TextField(forceWrapper.TextX, GUILayout.Width(60));
                 forceWrapper.ValueX = GUILayout.HorizontalSlider(forceWrapper.ValueX,
-                    forceWrapper.ValueX < -5 ? forceWrapper.ValueX : -5,
-                    forceWrapper.ValueX > 5 ? forceWrapper.ValueX : 5);
+                    forceWrapper.ValueX < VSLIDERMIN ? forceWrapper.ValueX : VSLIDERMIN,
+                    forceWrapper.ValueX > VSLIDERMAX ? forceWrapper.ValueX : VSLIDERMAX);
                 if (Clipboard != null)
                 {
                     if (Clipboard.data is float value && Clipboard.distribIndex == -2) // draw paste button
@@ -569,17 +599,24 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -2, forceWrapper.ValueX);
                     }
                 }
+                if (Editing.IsForceEdited(0)) GUI.color = Color.magenta;
+                else GUI.enabled = false;
                 if (GUILayout.Button(new GUIContent("R", $"Reset X"), GUILayout.Width(25)))
                 {
                     forceWrapper.ValueX = Editing.force.initialValue.x;
                 }
+                GUI.enabled = true; GUI.color = guic;
+                GUILayout.EndHorizontal();
                 #endregion
                 #region Force Sliders Y
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Y:", LabelStyle, GUILayout.Width(25));
+                if (Editing.IsForceEdited(1)) GUI.color = Color.magenta;
+                GUILayout.Label($"Y:", LabelStyle, GUILayout.Width(25));
+                GUI.color = guic;
+                forceWrapper.TextY = GUILayout.TextField(forceWrapper.TextY, GUILayout.Width(60));
                 forceWrapper.ValueY = GUILayout.HorizontalSlider(forceWrapper.ValueY,
-                    forceWrapper.ValueY < -5 ? forceWrapper.ValueY : -5,
-                    forceWrapper.ValueY > 5 ? forceWrapper.ValueY : 5);
+                    forceWrapper.ValueY < VSLIDERMIN ? forceWrapper.ValueY : VSLIDERMIN,
+                    forceWrapper.ValueY > VSLIDERMAX ? forceWrapper.ValueY : VSLIDERMAX);
                 if (Clipboard != null)
                 {
                     if (Clipboard.data is float value && Clipboard.distribIndex == -2) // draw paste button
@@ -602,17 +639,24 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -2, forceWrapper.ValueY);
                     }
                 }
+                if (Editing.IsForceEdited(1)) GUI.color = Color.magenta;
+                else GUI.enabled = false;
                 if (GUILayout.Button(new GUIContent("R", $"Reset Y"), GUILayout.Width(25)))
                 {
                     forceWrapper.ValueY = Editing.force.initialValue.y;
                 }
+                GUI.enabled = true;GUI.color = guic;
+                GUILayout.EndHorizontal();
                 #endregion
                 #region Force Sliders Z
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Z:", LabelStyle, GUILayout.Width(25));
+                if (Editing.IsForceEdited(2)) GUI.color = Color.magenta;
+                GUILayout.Label($"Z:", LabelStyle, GUILayout.Width(25));
+                GUI.color = guic;
+                forceWrapper.TextZ = GUILayout.TextField(forceWrapper.TextZ, GUILayout.Width(60));
                 forceWrapper.ValueZ = GUILayout.HorizontalSlider(forceWrapper.ValueZ,
-                    forceWrapper.ValueZ < -5 ? forceWrapper.ValueZ : -5,
-                    forceWrapper.ValueZ > 5 ? forceWrapper.ValueZ : 5);
+                    forceWrapper.ValueZ < VSLIDERMIN ? forceWrapper.ValueZ : VSLIDERMIN,
+                    forceWrapper.ValueZ > VSLIDERMAX ? forceWrapper.ValueZ : VSLIDERMAX);
                 if (Clipboard != null)
                 {
                     if (Clipboard.data is float value && Clipboard.distribIndex == -2) // draw paste button
@@ -635,16 +679,21 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -2, forceWrapper.ValueZ);
                     }
                 }
+                if (Editing.IsForceEdited(2)) GUI.color = Color.magenta;
+                else GUI.enabled = false;
                 if (GUILayout.Button(new GUIContent("R", $"Reset Z"), GUILayout.Width(25)))
                 {
                     forceWrapper.ValueZ = Editing.force.initialValue.z;
                 }
-                #endregion
+                GUI.enabled = true; GUI.color = guic;
                 GUILayout.EndHorizontal();
+                #endregion
             }
             #endregion
-            #region Right Side - Footer
+            GUILayout.Space(5);
             GUILayout.EndScrollView();
+
+            #region Right Side - Footer
             GUILayout.BeginHorizontal(GUILayout.Height(25));// bone level buttons
             if (Clipboard != null && Clipboard.boneIndex != currentIndex && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
             {
@@ -660,22 +709,31 @@ namespace DynamicBoneDistributionEditor
                     Clipboard = new ClipboardEntry(currentIndex, -1, Editing);
                 }
             }
+            if (Editing.IsEdited()) GUI.color = Color.magenta;
+            else GUI.enabled= false;
             if (GUILayout.Button("Reset All"))
             {
                 Editing.ResetBaseValues();
                 Editing.ResetDistribution();
+                Editing.ResetGravity();
+                Editing.ResetForce();
+                Editing.ResetFreezeAxis();
             }
+            GUI.enabled = true; GUI.color = guic;
+            if (Clipboard != null) GUI.color = Color.red;
+            else GUI.enabled = false;
             if (GUILayout.Button("Clear Clipboard"))
             {
                 Clipboard = null;
             }
+            GUI.enabled = true; GUI.color = guic;
             GUILayout.EndHorizontal();
             #endregion
             GUILayout.EndVertical();
             #endregion
-
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+            KKAPI.Utilities.IMGUIUtils.DrawTooltip(windowRect, 150);
             windowRect = KKAPI.Utilities.IMGUIUtils.DragResizeEatWindow(WindowID, windowRect);
         }
 
@@ -804,12 +862,14 @@ namespace DynamicBoneDistributionEditor
 
             private void setValue(ref float bValueField, ref string bTextField, float value)
             {
+                bool flag = false;
                 if (bValueField != value)
                 {
                     bTextField = value.ToString("0.000");
-                    _onChange.Invoke(new Vector3(_valueX, _valueY, _valueZ));
+                    flag = true;
                 }
                 bValueField = value;
+                if (flag) _onChange.Invoke(new Vector3(_valueX, _valueY, _valueZ));
             }
         }
     }

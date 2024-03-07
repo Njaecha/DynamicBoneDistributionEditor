@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -21,6 +23,7 @@ namespace DynamicBoneDistributionEditor
                 this._edited = true;
                 // maybe add custom comparison for the used types
                 if (_orgValue.Equals(value)) this._edited = false;
+                if (_orgValue is Keyframe[] orgKeys && value is Keyframe[] newKeys && orgKeys.SequenceEqual(newKeys)) _edited = false;
                 this._value = value;
             }
         }
