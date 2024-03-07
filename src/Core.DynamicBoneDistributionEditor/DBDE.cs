@@ -90,30 +90,43 @@ namespace DynamicBoneDistributionEditor
 
     public static class Extension
     {
+        private static readonly Dictionary<DynamicBone, string> cacheA = new Dictionary<DynamicBone, string>();
+        private static readonly Dictionary<DynamicBone, string> cacheC = new Dictionary<DynamicBone, string>();
+        private static readonly Dictionary<DynamicBone, string> cacheI = new Dictionary<DynamicBone, string>();
+
         /// <summary>
         /// Try to get a name by finding the path from a parent ChaAccessoryComponent (if there is any) to the root bone of the Dynamic Bone.
         /// </summary>
         /// <returns>If name could be constructed</returns>
         public static bool TryGetAccessoryQualifiedName(this DynamicBone dynamicBone, out string value)
         {
-            value = null;
+            if (dynamicBone.m_Root == null)
+            {
+                value = null; return false;
+            }
+            if (cacheA.TryGetValue(dynamicBone, out value) && value.EndsWith(dynamicBone.m_Root.name)) return true;
             ChaAccessoryComponent component = dynamicBone.m_Root?.transform.GetComponentInParent<ChaAccessoryComponent>();
             if (component == null) return false;
             string rootBonePath = dynamicBone.m_Root.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             if (!rootBonePath.StartsWith(componentPath)) return false;
             value = rootBonePath.Replace(componentPath, string.Empty);
+            cacheA[dynamicBone] = value;
             return true;
         }
 
         public static string GetAccessoryQualifiedName(this DynamicBone dynamicBone)
         {
+            if (dynamicBone.m_Root == null) return null;
+            if (cacheA.TryGetValue(dynamicBone, out string value) && value.EndsWith(dynamicBone.m_Root.name)) return value;
             ChaAccessoryComponent component = dynamicBone.m_Root?.transform.GetComponentInParent<ChaAccessoryComponent>();
             if (component == null) return null;
             string rootBonePath = dynamicBone.m_Root.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             if (!rootBonePath.StartsWith(componentPath)) return null;
-            return rootBonePath.Replace(componentPath, string.Empty);
+            value = rootBonePath.Replace(componentPath, string.Empty);
+            cacheA[dynamicBone] = value;
+            return value;
         }
 
         /// <summary>
@@ -122,27 +135,40 @@ namespace DynamicBoneDistributionEditor
         /// <returns>If name could be constructed</returns>
         public static bool TryGetChaControlQualifiedName(this DynamicBone dynamicBone, out string value)
         {
-            value = null;
+            if (dynamicBone.m_Root == null)
+            {
+                value = null; return false;
+            }
+            if (cacheC.TryGetValue(dynamicBone, out value) && value.EndsWith(dynamicBone.m_Root.name)) return true;
             ChaControl component = dynamicBone.m_Root?.transform.GetComponentInParent<ChaControl>();
             if (component == null) return false;
             string rootBonePath = dynamicBone.m_Root?.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             if (!rootBonePath.StartsWith(componentPath)) return false;
             value = rootBonePath.Replace(componentPath, string.Empty);
+            cacheC[dynamicBone] = value;
             return true;
         }
 
         public static string GetChaControlQualifiedName(this DynamicBone dynamicBone)
         {
+            if (dynamicBone.m_Root == null) return null;
+            if (cacheA.TryGetValue(dynamicBone, out string value) && value.EndsWith(dynamicBone.m_Root.name)) return value;
             ChaControl component = dynamicBone.m_Root?.transform.GetComponentInParent<ChaControl>();
             if (component == null) return null;
             string rootBonePath = dynamicBone.m_Root.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             if (!rootBonePath.StartsWith(componentPath)) return null;
-            return rootBonePath.Replace(componentPath, string.Empty);
+            value = rootBonePath.Replace(componentPath, string.Empty);
+            cacheC[dynamicBone] = value;
+            return value;
         }
 
-        public static void UpdateDistributions(this DynamicBone dynamicBone)
+        /// <summary>
+        /// Applies changes made to the values on the dynamic bone by updating all particles. 
+        /// </summary>
+        /// <param name="dynamicBone"></param>
+        public static void UpdateParticles(this DynamicBone dynamicBone)
         {
             for (int i = 0; i < dynamicBone.m_Particles.Count; i++)
             {

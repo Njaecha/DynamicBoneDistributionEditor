@@ -231,7 +231,7 @@ namespace DynamicBoneDistributionEditor
                 if (db.m_StiffnessDistrib == null) dynamicBone.m_StiffnessDistrib = new AnimationCurve(distributions[4]);
                 else db.m_StiffnessDistrib.SetKeys(distributions[4]);
             }
-            db.UpdateDistributions();
+            db.UpdateParticles();
 		}
 
         public void ResetDistribution(int? kind = null)
@@ -270,7 +270,7 @@ namespace DynamicBoneDistributionEditor
                 db.m_RadiusDistrib.SetKeys(distributions[3]);
                 db.m_StiffnessDistrib.SetKeys(distributions[4]);
             }
-            dynamicBone.UpdateDistributions();
+            dynamicBone.UpdateParticles();
         }
 
         public void ApplyBaseValues(int? kind = null)
@@ -306,7 +306,7 @@ namespace DynamicBoneDistributionEditor
                 db.m_Radius = baseValues[3];
                 db.m_Stiffness = baseValues[4];
             }
-            db.UpdateDistributions();
+            db.UpdateParticles();
         }
 
         public void ResetBaseValues(int? kind = null)
@@ -348,7 +348,7 @@ namespace DynamicBoneDistributionEditor
                     e.Reset();
                 }
             }
-            db.UpdateDistributions();
+            db.UpdateParticles();
         }
 
         public void ApplyGravity()

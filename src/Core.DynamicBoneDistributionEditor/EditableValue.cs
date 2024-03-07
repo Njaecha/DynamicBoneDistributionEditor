@@ -20,13 +20,12 @@ namespace DynamicBoneDistributionEditor
             {
                 this._edited = true;
                 // maybe add custom comparison for the used types
-                if (_orgValue.Equals(value))
-                {
-                    this._edited = false;
-                }
+                if (_orgValue.Equals(value)) this._edited = false;
                 this._value = value;
             }
         }
+
+        public T initialValue { get => _orgValue; }
 
         public bool IsEdited { get => _edited; }
 
