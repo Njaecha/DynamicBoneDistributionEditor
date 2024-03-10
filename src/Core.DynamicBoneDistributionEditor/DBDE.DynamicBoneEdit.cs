@@ -22,6 +22,7 @@ namespace DynamicBoneDistributionEditor
 
         public EditableValue<Vector3> gravity;
         public EditableValue<Vector3> force;
+        public EditableValue<Vector3> endOffset;
         public EditableValue<DynamicBone.FreezeAxis> freezeAxis;
 
         private bool _active;
@@ -31,13 +32,13 @@ namespace DynamicBoneDistributionEditor
 		internal Func<DynamicBone> AccessorFunciton { get => DynamicBoneAccessor; }
 		private readonly Func<DynamicBone> DynamicBoneAccessor;
 
-		internal object RedindificiationData;
+		internal object ReidentificationData;
 		
         internal string GetButtonName()
         {
             string n = "";
-            if (RedindificiationData is KeyValuePair<int, string> kvp) n = $"Slot {kvp.Key+1} - ";
-            return n + dynamicBone.m_Root.name;
+            if (ReidentificationData is KeyValuePair<int, string> kvp) n = $"Slot {kvp.Key+1} - ";
+            return n + dynamicBone?.m_Root?.name;
         }
 
 		private Keyframe[] getDefaultCurveKeyframes()
@@ -55,14 +56,11 @@ namespace DynamicBoneDistributionEditor
             this.freezeAxis = copyFrom.freezeAxis;
             this.gravity = copyFrom.gravity;
             this.force = copyFrom.force;
+            this.endOffset = copyFrom.endOffset;
 
             this.SetActive(copyFrom.active);
 
-            ApplyDistribution();
-            ApplyBaseValues();
-            ApplyGravity();
-            ApplyForce();
-            ApplyFreezeAxis();
+            ApplyAll();
         }
 
 		public DBDEDynamicBoneEdit(Func<DynamicBone> DynamicBoneAccessor, DBDEDynamicBoneEdit copyFrom)
@@ -89,6 +87,7 @@ namespace DynamicBoneDistributionEditor
 
             gravity = new EditableValue<Vector3>(db.m_Gravity);
             force = new EditableValue<Vector3>(db.m_Force);
+            endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
 
             PasteData(copyFrom);
@@ -118,31 +117,65 @@ namespace DynamicBoneDistributionEditor
 
             gravity = new EditableValue<Vector3>(db.m_Gravity);
             force = new EditableValue<Vector3>(db.m_Force);
+            endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
 
 			if (serialised != null)
 			{
+                //DBDE.Logger.LogInfo($"Deserialising {db.m_Root.name}");
                 List<byte[]> edits = MessagePackSerializer.Deserialize<List<byte[]>>(serialised);
-                if (edits.Count != 6) return;
-				var distribs = MessagePackSerializer.Deserialize<Dictionary<byte, Keyframe[]>>(edits[0]);
-				foreach (byte i in distribs.Keys)
-				{
-                    distributions[i] = (EditableValue<Keyframe[]>)distribs[i];
-				}
-                var bValue = MessagePackSerializer.Deserialize<Dictionary<byte, float>>(edits[1]);
-                foreach (byte i in bValue.Keys)
+                if (edits.Count != 7) return;
+                //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Distribution");
+                if (!edits[0].IsNullOrEmpty())
                 {
-                    baseValues[i] = (EditableValue<float>)bValue[i];
+				    var distribs = MessagePackSerializer.Deserialize<Dictionary<byte, Keyframe[]>>(edits[0]);
+				    foreach (byte i in distribs.Keys)
+				    {
+                        if (DBDE.loadSettingsAsDefault.Value) distributions[i] = (EditableValue<Keyframe[]>)distribs[i];
+                        else distributions[i].value = distribs[i];
+				    }
                 }
-                var sGravity = MessagePackSerializer.Deserialize<Vector3>(edits[2]);
-                if (sGravity != null) gravity = (EditableValue<Vector3>)sGravity;
-                var sForce = MessagePackSerializer.Deserialize<Vector3>(edits[3]);
-                if (sForce != null) force = (EditableValue<Vector3>)sForce;
-                var sAxis = MessagePackSerializer.Deserialize<byte?>(edits[4]);
-                if (sAxis.HasValue) freezeAxis = (EditableValue<DynamicBone.FreezeAxis>)(DynamicBone.FreezeAxis)sAxis;
-                SetActive(MessagePackSerializer.Deserialize<bool>(edits[5]));
+                //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading BaseValue");
+                if (!edits[1].IsNullOrEmpty())
+                {
+                    var bValue = MessagePackSerializer.Deserialize<Dictionary<byte, float>>(edits[1]);
+                    foreach (byte i in bValue.Keys)
+                    {
+                        if (DBDE.loadSettingsAsDefault.Value) baseValues[i] = (EditableValue<float>)bValue[i];
+                        else baseValues[i].value = bValue[i];
+                    }
+                }
+                //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Gravity");
+                if (!edits[2].IsNullOrEmpty()) LoadVector(edits[2], ref gravity);
+                //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Force");
+                if (!edits[3].IsNullOrEmpty()) LoadVector(edits[3], ref force);
+                //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading EndOffset");
+                if (!edits[4].IsNullOrEmpty()) LoadVector(edits[4], ref endOffset);
+                //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading FreezeAxis");
+                if (!edits[5].IsNullOrEmpty()) 
+                { 
+                    var sAxis = MessagePackSerializer.Deserialize<byte?>(edits[5]);
+                    if (sAxis.HasValue)
+                    {
+                        if (DBDE.loadSettingsAsDefault.Value) freezeAxis = (EditableValue<DynamicBone.FreezeAxis>)(DynamicBone.FreezeAxis)sAxis;
+                        else freezeAxis.value = (DynamicBone.FreezeAxis)sAxis;
+                    }
+                }
+                SetActive(MessagePackSerializer.Deserialize<bool>(edits[6]));
             }
 		}
+
+        private void LoadVector(byte[] binary, ref EditableValue<Vector3> editableValue)
+        {
+            var sValue = MessagePackSerializer.Deserialize<Vector3>(binary);
+            if (sValue != null)
+            {
+                string s = sValue.ToString("F4");
+                // DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Vector: {s} (As Default = {DBDE.loadSettingsAsDefault.Value})");
+                if (DBDE.loadSettingsAsDefault.Value) editableValue = (EditableValue<Vector3>)sValue;
+                else editableValue.value = sValue;
+            }
+        }
 
         public void SetActive(bool active)
         {
@@ -172,16 +205,10 @@ namespace DynamicBoneDistributionEditor
 				.Select((v, i) => new KeyValuePair<byte, float>((byte)i, v))
 				.ToDictionary(x => x.Key, x => x.Value);
             byte[] sBaseValues = MessagePackSerializer.Serialize(bValues);
-            byte[] sGravtiy = null;
-            if (gravity.IsEdited)
-            {
-                sGravtiy = MessagePackSerializer.Serialize(gravity.value);
-            }
-            byte[] sFroce = null;
-            if (force.IsEdited)
-            {
-                sFroce = MessagePackSerializer.Serialize(force.value);
-            }
+
+            byte[] sGravtiy = SerialiseEditableVector(gravity);
+            byte[] sFroce = SerialiseEditableVector(force);
+            byte[] sEndOffset = SerialiseEditableVector(endOffset);
             byte[] sAxis = null;
             if (freezeAxis.IsEdited)
             {
@@ -189,9 +216,19 @@ namespace DynamicBoneDistributionEditor
             }
             byte[] sActive = MessagePackSerializer.Serialize(active);
 
-            List<byte[]> edits = new List<byte[]>() {sDistrib, sBaseValues, sGravtiy, sFroce, sAxis, sActive };
+            List<byte[]> edits = new List<byte[]>() {sDistrib, sBaseValues, sGravtiy, sFroce, sEndOffset, sAxis, sActive };
             return MessagePackSerializer.Serialize(edits);
 		}
+
+        private byte[] SerialiseEditableVector(EditableValue<Vector3> editableValue)
+        {
+            byte[] binary = null;
+            if (editableValue.IsEdited)
+            {
+                binary = MessagePackSerializer.Serialize(editableValue.value);
+            }
+            return binary;
+        }
 
         ///<summary></summary>
         /// <param name="axis">X=0, Y=1, Z=2</param>
@@ -233,6 +270,26 @@ namespace DynamicBoneDistributionEditor
             }
             else return force.IsEdited;
         }
+        ///<summary></summary>
+        /// <param name="axis">X=0, Y=1, Z=2</param>
+        public bool IsEndOffsetEdited(int? axis = null)
+        {
+            if (axis.HasValue)
+            {
+                switch (axis.Value)
+                {
+                    case 0:
+                        return endOffset.value.x != endOffset.initialValue.x;
+                    case 1:
+                        return endOffset.value.y != endOffset.initialValue.y;
+                    case 2:
+                        return endOffset.value.z != endOffset.initialValue.z;
+                    default:
+                        return false;
+                }
+            }
+            else return endOffset.IsEdited;
+        }
 
         public bool IsEdited(int kind)
         {
@@ -253,9 +310,20 @@ namespace DynamicBoneDistributionEditor
             }
             if (gravity.IsEdited) return true;
             if (force.IsEdited) return true;
+            if (endOffset.IsEdited) return true;
             if (freezeAxis.IsEdited) return true;
 			return false;
 		}
+
+        public void ApplyAll()
+        {
+            ApplyDistribution();
+            ApplyBaseValues();
+            ApplyGravity();
+            ApplyForce();
+            ApplyEndOffset();
+            ApplyFreezeAxis();
+        }
 
 		public void ApplyDistribution(int? kind = null)
 		{
@@ -445,6 +513,18 @@ namespace DynamicBoneDistributionEditor
         {
             freezeAxis.Reset();
             dynamicBone.m_FreezeAxis = freezeAxis;
+        }
+
+        public void ApplyEndOffset()
+        {
+            dynamicBone.m_EndOffset = endOffset;
+            dynamicBone.UpdateParticles();
+        }
+        public void ResetEndOffset()
+        {
+            endOffset.Reset();
+            dynamicBone.m_EndOffset = endOffset;
+            dynamicBone.UpdateParticles();
         }
     }
 }

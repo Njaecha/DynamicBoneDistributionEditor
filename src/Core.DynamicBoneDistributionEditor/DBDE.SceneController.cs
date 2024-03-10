@@ -11,6 +11,8 @@ using ExtensibleSaveFormat;
 using MessagePack;
 using AnimationCurveEditor;
 using static AnimationCurveEditor.AnimationCurveEditor;
+using System.Collections;
+using KKAPI.Studio;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -22,25 +24,41 @@ namespace DynamicBoneDistributionEditor
         {
             if (operation == SceneOperationKind.Load || operation == SceneOperationKind.Clear) DistributionEdits.Clear();
 
+            StartCoroutine(SceneLoadDelayed(loadedItems));
+        }
+
+        internal DynamicBone GetDynamicBone(int key, int index)
+        {
+            if (Studio.Studio.Instance.dicObjectCtrl.TryGetValue(key, out var oci) && oci is OCIItem item && item.dynamicBones.Count() > index) return item.dynamicBones[index];
+            return null;
+        }
+
+        private IEnumerator SceneLoadDelayed(ReadOnlyDictionary<int, ObjectCtrlInfo> loadedItems)
+        {
+            yield return null;
+            yield return null; // wait two frames so that all other mods have applies their stuff
+
             PluginData data = GetExtendedData();
             if (data.data.TryGetValue("Edits", out var bytes) && bytes != null)
             {
                 Dictionary<int, List<byte[]>> intermediate = MessagePackSerializer.Deserialize<Dictionary<int, List<byte[]>>>((byte[])bytes);
 
-                foreach(int oldKey in intermediate.Keys)
+                foreach (int oldKey in intermediate.Keys)
                 {
                     if (loadedItems[oldKey] is OCIItem oci)
                     {
-                        if (!DistributionEdits.ContainsKey(oci.itemInfo.dicKey)) DistributionEdits.Add(oci.itemInfo.dicKey, new List<DBDEDynamicBoneEdit>());
+                        int newKey = oci.GetSceneId();
+                        if (!DistributionEdits.ContainsKey(newKey)) DistributionEdits.Add(newKey, new List<DBDEDynamicBoneEdit>());
                         for (int i = 0; i < oci.dynamicBones.Length; i++)
                         {
-                            DistributionEdits[oci.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[oci.itemInfo.dicKey]).dynamicBones[i], intermediate[oldKey][i]) { RedindificiationData = oci.itemInfo.dicKey });
+                            int num = i;
+                            DistributionEdits[newKey].Add(new DBDEDynamicBoneEdit(() => GetDynamicBone(newKey, num), intermediate[oldKey][i]) { ReidentificationData = newKey });
                         }
                     }
                 }
             }
             // Apply Edits on all DBs 
-            DistributionEdits.Values.ToList().ForEach(x => x.ForEach(y => { y.ApplyDistribution(); y.ApplyBaseValues(); }));
+            DistributionEdits.Values.ToList().ForEach(x => x.ForEach(y => y.ApplyAll()));
         }
 
         protected override void OnSceneSave()
@@ -60,16 +78,24 @@ namespace DynamicBoneDistributionEditor
 
         protected override void OnObjectsCopied(ReadOnlyDictionary<int, ObjectCtrlInfo> copiedItems)
         {
-            foreach(int id in copiedItems.Keys)
+            StartCoroutine(ObjectsCopiesDelayed(copiedItems));  
+        }
+
+        private IEnumerator ObjectsCopiesDelayed(ReadOnlyDictionary<int, ObjectCtrlInfo> copiedItems)
+        {
+            yield return null;
+            yield return null;
+            foreach (int id in copiedItems.Keys)
             {
-                if (!(copiedItems[id] is OCIItem newItem)) return;
+                if (!(copiedItems[id] is OCIItem newItem)) continue;
                 OCIItem olditem = Studio.Studio.GetCtrlInfo(id) as OCIItem;
                 if (DistributionEdits.ContainsKey(olditem.itemInfo.dicKey))
                 {
                     DistributionEdits.Add(newItem.itemInfo.dicKey, new List<DBDEDynamicBoneEdit>());
                     for (int i = 0; i < newItem.dynamicBones.Length; i++)
                     {
-                        DistributionEdits[newItem.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[newItem.itemInfo.dicKey]).dynamicBones[i], DistributionEdits[olditem.itemInfo.dicKey][i]) { RedindificiationData = newItem.itemInfo.dicKey});
+                        int num = i;
+                        DistributionEdits[newItem.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => GetDynamicBone(newItem.GetSceneId(), num), DistributionEdits[olditem.itemInfo.dicKey][num]) { ReidentificationData = newItem.GetSceneId() });
                     }
                 }
             }
@@ -91,12 +117,15 @@ namespace DynamicBoneDistributionEditor
                 DistributionEdits.Add(oci.itemInfo.dicKey, new List<DBDEDynamicBoneEdit>());
                 for (int i = 0; i < oci.dynamicBones.Length; i++)
                 {
+                    int num = i;
+                    int dicKey = oci.itemInfo.dicKey;
                     DynamicBone db = oci.dynamicBones[i];
-                    DBDE.Logger.LogInfo($"Adding DynamicBone: Key={oci.itemInfo.dicKey} | DB={db.name} | {oci.dynamicBones.Length}");
-                    DistributionEdits[oci.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => ((OCIItem)Studio.Studio.Instance.dicObjectCtrl[oci.itemInfo.dicKey]).dynamicBones[i]) { RedindificiationData = oci.itemInfo.dicKey});
+                    //DBDE.Logger.LogInfo($"Adding DynamicBone: Key={oci.itemInfo.dicKey} | DB={db.name} | {oci.dynamicBones.Length}");
+                    DistributionEdits[oci.itemInfo.dicKey].Add(new DBDEDynamicBoneEdit(() => GetDynamicBone(dicKey, num)) { ReidentificationData = oci.itemInfo.dicKey});
                 }
             }
-            DBDE.UI.Open(() => DistributionEdits.ContainsKey(oci.itemInfo.dicKey) ? DistributionEdits[oci.itemInfo.dicKey] : null);
+            DBDE.UI.Open(() => DistributionEdits.ContainsKey(oci.itemInfo.dicKey) ? DistributionEdits[oci.itemInfo.dicKey] : null, () => { });
+            DBDE.UI.TitleAppendix = oci.treeNodeObject.textName;
         }
     }
 }

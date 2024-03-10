@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using BepInEx;
 using BepInEx.Logging;
+using BepInEx.Configuration;
 using HarmonyLib;
 using KKAPI;
 using KKAPI.Chara;
@@ -11,7 +12,13 @@ using KKAPI.Studio.SaveLoad;
 using KKAPI.Utilities;
 using UniRx;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using IllusionFixes;
+using Config;
+using System.Linq;
+using ADV.Commands.Effect;
+using KKAPI.Studio;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -21,7 +28,7 @@ namespace DynamicBoneDistributionEditor
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "0.0.1";
+        public const string Version = "0.1.0";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
@@ -29,6 +36,9 @@ namespace DynamicBoneDistributionEditor
         internal static DBDEUI UI;
 
         internal static SidebarToggle toggle;
+
+        public static ConfigEntry<bool> loadSettingsAsDefault;
+        public static ConfigEntry<bool> drawGizmos;
 
         void Awake()
         {
@@ -47,12 +57,67 @@ namespace DynamicBoneDistributionEditor
 
             MakerAPI.MakerBaseLoaded += createSideBarToggle;
 
+            loadSettingsAsDefault = Config.Bind("", "Load Settings as default", false, "Enable this to load the settings saved by DBDE as defaults (for the revert buttons) instead of the dynamic bone's own defaults (set by game/zipmod).");
+            drawGizmos = Config.Bind("", "Draw Gizmos", true, "Toggle gizmos. Can also be toggled in the UI");
+
             Instance = this;
+        }
+
+        void Start()
+        {
+            SceneManager.sceneLoaded += (s, lsm) => createStudioButton(s.name);
+        }
+
+        // borrowed from Material Editor
+        private void createStudioButton(string sceneName)
+        {
+            if (sceneName != "Studio") return;
+            SceneManager.sceneLoaded -= (s, lsm) => createStudioButton(s.name);
+
+            RectTransform original = GameObject.Find("StudioScene").transform.Find("Canvas Object List/Image Bar/Button Route").GetComponent<RectTransform>();
+
+            Button DBDEStudioButton = Instantiate(original.gameObject).GetComponent<Button>();
+            DBDEStudioButton.name = "Button DBDE";
+
+            RectTransform DBDEStudioButtonTransfrom = DBDEStudioButton.transform as RectTransform;
+            DBDEStudioButton.transform.SetParent(original.parent, true);
+            DBDEStudioButton.transform.localScale = original.localScale;
+            DBDEStudioButtonTransfrom.SetRect(original.anchorMin, original.anchorMax, original.offsetMin, original.offsetMax);
+
+            DBDEStudioButtonTransfrom.anchoredPosition = original.anchoredPosition + new Vector2(-48f*3+4, 0f);
+
+
+            Texture2D texture2D = new Texture2D(80, 80);
+            texture2D.LoadImage(Convert.FromBase64String("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"));
+            var DBDEIcon = DBDEStudioButton.targetGraphic as Image;
+            DBDEIcon.sprite = Sprite.Create(texture2D, new Rect(0f, 0f, 80, 80), new Vector2(40, 40));
+            DBDEIcon.color = Color.white;
+
+            DBDEStudioButton.onClick = new Button.ButtonClickedEvent();
+            DBDEStudioButton.onClick.AddListener(() => {
+                List<Studio.ObjectCtrlInfo> ocis = StudioAPI.GetSelectedObjects().ToList();
+                if (!ocis.IsNullOrEmpty())
+                {
+                    if (ocis[0] is Studio.OCIItem item)
+                    {
+                        GetComponentInChildren<DBDESceneController>()?.OpenDBDE(item);
+                    }
+
+                    if (ocis[0] is Studio.OCIChar cha)
+                    {
+                        cha.GetChaControl()?.GetComponent<DBDECharaController>()?.OpenDBDE();
+                    }
+                }
+            });
         }
 
         private void toggleEvent(bool toggle)
         {
-            if (toggle) MakerAPI.GetCharacterControl()?.GetComponent<DBDECharaController>()?.OpenDBDE();
+            if (toggle)
+            {
+                MakerAPI.GetCharacterControl()?.GetComponent<DBDECharaController>()?.OpenDBDE();
+            }
+            else UI.Close();
         }
 
         private void createSideBarToggle(object sender, RegisterCustomControlsEvent e)
@@ -207,7 +272,21 @@ namespace DynamicBoneDistributionEditor
                 particle.m_Stiffness = Mathf.Clamp01(particle.m_Stiffness);
                 particle.m_Inert = Mathf.Clamp01(particle.m_Inert);
                 particle.m_Radius = Mathf.Max(particle.m_Radius, 0f);
+
+                if (particle.m_Transform != null)
+                {
+                    particle.m_Transform.localPosition = particle.m_InitLocalPosition;
+                    particle.m_Transform.localRotation = particle.m_InitLocalRotation;
+                }
             }
+        }
+
+        public static void SetRect(this RectTransform self, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            self.anchorMin = anchorMin;
+            self.anchorMax = anchorMax;
+            self.offsetMin = offsetMin;
+            self.offsetMax = offsetMax;
         }
     }
 }

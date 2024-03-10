@@ -12,6 +12,8 @@
     <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -30,6 +32,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="KKS_Fix_MakerOptimizations">
@@ -85,6 +88,10 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>..\packages\IllusionLibs.KoikatsuSunshine.Assembly-CSharp.2021.9.17\lib\net46\Assembly-CSharp.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.2019.4.9\lib\net46\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.IMGUIModule.2019.4.9\lib\net46\UnityEngine.IMGUIModule.dll</HintPath>
     </Reference>
@@ -129,4 +136,11 @@
     <PostBuildEvent>copy "$(TargetPath)" "P:\Koikatsu_Sunshine\BepInEx\Plugins\KKS_DynamicBoneDistributionEditor.dll"</PostBuildEvent>
   </PropertyGroup>
   <Import Project="..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.TextRenderingModule.2019.4.9\build\IllusionLibs.KoikatsuSunshine.UnityEngine.TextRenderingModule.targets" Condition="Exists('..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.TextRenderingModule.2019.4.9\build\IllusionLibs.KoikatsuSunshine.UnityEngine.TextRenderingModule.targets')" />
+  <Import Project="..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.2019.4.9\build\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.targets" Condition="Exists('..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.2019.4.9\build\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>Dieses Projekt verweist auf mindestens ein NuGet-Paket, das auf diesem Computer fehlt. Verwenden Sie die Wiederherstellung von NuGet-Paketen, um die fehlenden Dateien herunterzuladen. Weitere Informationen finden Sie unter "http://go.microsoft.com/fwlink/?LinkID=322105". Die fehlende Datei ist "{0}".</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.2019.4.9\build\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.2019.4.9\build\IllusionLibs.KoikatsuSunshine.UnityEngine.ImageConversionModule.targets'))" />
+  </Target>
 </Project>
