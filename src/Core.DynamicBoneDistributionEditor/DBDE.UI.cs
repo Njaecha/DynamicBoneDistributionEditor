@@ -65,6 +65,8 @@ namespace DynamicBoneDistributionEditor
 
         public string TitleAppendix = "";
 
+        public bool UpdateUIWhileOpen = true;
+
         void Start()
         {
             rTex = new RenderTexture(Screen.width, Screen.height, 32);
@@ -169,7 +171,7 @@ namespace DynamicBoneDistributionEditor
             ace.Init(curve, lastUsedAceRect, 2, 0, 0.5f);
             ace.enabled = true;
             ace.borderingKeyframesDeletable = false;
-            ace.displayName = Editing.dynamicBone.m_Root.name + " - " + DistribKindNames[num];
+            ace.displayName = Editing.DynamicBone.m_Root.name + " - " + DistribKindNames[num];
             ace.KeyframeEdited = new EventHandler<KeyframeEditedArgs>((object o, KeyframeEditedArgs e) =>
             {
                 Editing.SetAnimationCurve(num, e.curve);
@@ -191,7 +193,7 @@ namespace DynamicBoneDistributionEditor
             if (DBDES.IsNullOrEmpty()) return;
             DBDEDynamicBoneEdit Editing = DBDES[boneIndex];
             if (Editing == null) return;
-            DynamicBone db = Editing.dynamicBone;
+            DynamicBone db = Editing.DynamicBone;
             if (db == null) return;
             currentIndex = boneIndex;
             BaseValueWrappers = new BaseValueEditWrapper[]
@@ -289,6 +291,14 @@ namespace DynamicBoneDistributionEditor
             #region Right Side
 
             DBDEDynamicBoneEdit Editing = DBDES[currentIndex];
+
+            if (UpdateUIWhileOpen)
+            {
+                Editing.ReferToDynamicBone();
+                gravityWrapper.SetForVector(Editing.gravity.value);
+                forceWrapper.SetForVector(Editing.force.value);
+            }
+
             GUILayout.BeginVertical(); // bone settings
             #region Right Side - Header
             GUILayout.BeginHorizontal(); // header
@@ -803,7 +813,7 @@ namespace DynamicBoneDistributionEditor
                 this._onChange = onChange;
             }
 
-            private void SetForVector(Vector3 vector)
+            internal void SetForVector(Vector3 vector)
             {
                 TextX = vector.x.ToString("0.00000");
                 TextY = vector.y.ToString("0.00000");

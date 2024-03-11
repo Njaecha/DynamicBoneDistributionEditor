@@ -31,8 +31,14 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="KKPE">
+      <HintPath>..\packages\KKPE.dll</HintPath>
+    </Reference>
     <Reference Include="KK_Fix_MakerOptimizations">
       <HintPath>..\..\..\_Libs_KK\KK_Fix_MakerOptimizations.dll</HintPath>
+    </Reference>
+    <Reference Include="Screencap">
+      <HintPath>P:\Koikatsu\BepInEx\Plugins\KK_BepisPlugins\Screencap.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

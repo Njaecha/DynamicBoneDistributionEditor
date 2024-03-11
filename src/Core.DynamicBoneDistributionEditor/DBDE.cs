@@ -19,16 +19,19 @@ using Config;
 using System.Linq;
 using ADV.Commands.Effect;
 using KKAPI.Studio;
+using Screencap;
+using BepInEx.Bootstrap;
 
 namespace DynamicBoneDistributionEditor
 {
     [BepInPlugin(GUID, PluginName, Version)]
     [BepInDependency(KoikatuAPI.GUID, KoikatuAPI.VersionConst)]
+    [BepInDependency(ScreenshotManager.GUID)]
     public class DBDE : BaseUnityPlugin
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
@@ -61,11 +64,26 @@ namespace DynamicBoneDistributionEditor
             drawGizmos = Config.Bind("", "Draw Gizmos", true, "Toggle gizmos. Can also be toggled in the UI");
 
             Instance = this;
+            
+        }
+
+        private void ScreenshotManager_OnPostCapture()
+        {
+            DBDEGizmoController gizmo = Camera.main.GetComponent<DBDEGizmoController>();
+            if (gizmo != null) gizmo.enabled = true;
+        }
+
+        private void ScreenshotManager_OnPreCapture()
+        {
+            DBDEGizmoController gizmo = Camera.main.GetComponent<DBDEGizmoController>();
+            if (gizmo != null) gizmo.enabled = false;
         }
 
         void Start()
         {
             SceneManager.sceneLoaded += (s, lsm) => createStudioButton(s.name);
+            ScreenshotManager.OnPreCapture += ScreenshotManager_OnPreCapture;
+            ScreenshotManager.OnPostCapture += ScreenshotManager_OnPostCapture;
         }
 
         // borrowed from Material Editor

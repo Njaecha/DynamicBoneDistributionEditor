@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Studio;
+using System.Linq;
 
 namespace DynamicBoneDistributionEditor
 {
