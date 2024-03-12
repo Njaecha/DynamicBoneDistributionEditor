@@ -29,7 +29,11 @@ namespace DynamicBoneDistributionEditor
 
         protected override void OnSceneLoad(SceneOperationKind operation, ReadOnlyDictionary<int, ObjectCtrlInfo> loadedItems)
         {
-            if (operation == SceneOperationKind.Load || operation == SceneOperationKind.Clear) DistributionEdits.Clear();
+            if (operation == SceneOperationKind.Load || operation == SceneOperationKind.Clear)
+            {
+                DistributionEdits.Clear();
+            }
+            if (operation == SceneOperationKind.Clear) return;
 
             StartCoroutine(SceneLoadDelayed(loadedItems));
         }
@@ -94,6 +98,7 @@ namespace DynamicBoneDistributionEditor
 
         private IEnumerator ObjectsCopiesDelayed(ReadOnlyDictionary<int, ObjectCtrlInfo> copiedItems)
         {
+            DBDE.UI.UpdateUIWhileOpen = false;
             yield return null;
             yield return null;
             foreach (int id in copiedItems.Keys)
@@ -110,6 +115,7 @@ namespace DynamicBoneDistributionEditor
                     }
                 }
             }
+            DBDE.UI.UpdateUIWhileOpen = true;
         }
 
         internal void OpenDBDE(int dictKey)

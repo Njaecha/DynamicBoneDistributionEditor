@@ -241,6 +241,7 @@ namespace DynamicBoneDistributionEditor
 
         private IEnumerator AccessoryTransferedDelayed(int source, int destination)
         {
+            DBDE.UI.UpdateUIWhileOpen = false;
             yield return null;
             yield return null;
 
@@ -258,6 +259,7 @@ namespace DynamicBoneDistributionEditor
                 sourceEdit.ApplyAll();
             }
             StartCoroutine(RefreshBoneListDelayed());
+            DBDE.UI.UpdateUIWhileOpen = true;
         }
 
         internal void AccessoryCopiedEvent(int sourceOutfit, int destinationOutfit, IEnumerable<int> slots)
@@ -267,6 +269,7 @@ namespace DynamicBoneDistributionEditor
 
         private IEnumerator AccessoryCopiedDelayed(int sourceOutfit, int destinationOutfit, IEnumerable<int> slots)
         {
+            DBDE.UI.UpdateUIWhileOpen = false;
             yield return null;
             yield return null;
 
@@ -282,6 +285,7 @@ namespace DynamicBoneDistributionEditor
                 .ForEach(edit => DistributionEdits[destinationOutfit].Add(new DBDEDynamicBoneEdit(edit.AccessorFunciton, edit) { ReidentificationData = edit.ReidentificationData }));
             
             StartCoroutine(RefreshBoneListDelayed());
+            DBDE.UI.UpdateUIWhileOpen = true;
         }
 
         public void OpenDBDE()
@@ -306,7 +310,7 @@ namespace DynamicBoneDistributionEditor
             }
             if (outfit != ChaControl.fileStatus.coordinateType) return;
 
-            // == add new DBDEDynamicBoneEdits for found DBs that dont have a accorind DBDEDynamicBoneEdit.
+            // == add new DBDEDynamicBoneEdits for found DBs that dont have a according DBDEDynamicBoneEdit.
             // == splitup between accessories and body/cloth dynamic bones to reduce possibility for ambiguous results in the getDynamicBone method.
 
             // for non accessory dynamic bones
