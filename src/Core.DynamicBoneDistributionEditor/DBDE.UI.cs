@@ -833,7 +833,7 @@ namespace DynamicBoneDistributionEditor
             {
                 if (bTextField != text)
                 {
-                    if (float.TryParse(text, out float v) && v >= 0f && v <= 1f) ValueSetter.Invoke(v);
+                    if (float.TryParse(text, out float v) && v >= -1f && v <= 1f) ValueSetter.Invoke(v);
                 }
                 bTextField = text;
             }
