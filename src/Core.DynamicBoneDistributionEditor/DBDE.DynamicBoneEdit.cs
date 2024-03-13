@@ -374,6 +374,16 @@ namespace DynamicBoneDistributionEditor
             ApplyFreezeAxis();
         }
 
+        public void ResetAll()
+        {
+            ResetBaseValues();
+            ResetDistribution();
+            ResetGravity();
+            ResetForce();
+            ResetEndOffset();
+            ResetFreezeAxis();
+        }
+
 		public void ApplyDistribution(int? kind = null)
 		{
             DynamicBone db = DynamicBone;
@@ -450,7 +460,7 @@ namespace DynamicBoneDistributionEditor
             }
             else
             {
-                foreach (var d in distributions) d.Reset();
+                for (int i = 0; i < distributions.Length; i++) distributions[i].Reset();
                 db.m_DampingDistrib?.SetKeys(distributions[0]);
                 db.m_ElasticityDistrib?.SetKeys(distributions[1]);
                 db.m_InertDistrib?.SetKeys(distributions[2]);
@@ -526,7 +536,7 @@ namespace DynamicBoneDistributionEditor
             }
             else
             {
-                foreach (var b in baseValues) b.Reset();
+                for (int i = 0; i < baseValues.Length; i++) baseValues[i].Reset();
                 db.m_Damping = baseValues[0];
                 db.m_Elasticity = baseValues[1];
                 db.m_Inert = baseValues[2];

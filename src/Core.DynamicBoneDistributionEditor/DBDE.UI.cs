@@ -269,12 +269,7 @@ namespace DynamicBoneDistributionEditor
                 else GUI.enabled = false;
                 if (GUILayout.Button("R", GUILayout.Width(25)))
                 {
-                    DBEdit.ResetBaseValues();
-                    DBEdit.ResetDistribution();
-                    DBEdit.ResetGravity();
-                    DBEdit.ResetForce();
-                    DBEdit.ResetEndOffset();
-                    DBEdit.ResetFreezeAxis();
+                    DBEdit.ResetAll();
                 }
                 GUI.enabled = true; GUI.color = guic;
                 GUILayout.EndHorizontal();
@@ -494,12 +489,7 @@ namespace DynamicBoneDistributionEditor
             else GUI.enabled= false;
             if (GUILayout.Button("Reset All"))
             {
-                Editing.ResetBaseValues();
-                Editing.ResetDistribution();
-                Editing.ResetGravity();
-                Editing.ResetForce();
-                Editing.ResetEndOffset();
-                Editing.ResetFreezeAxis();
+                Editing.ResetAll();
             }
             GUI.enabled = true; GUI.color = guic;
             if (Clipboard != null) GUI.color = Color.red;
