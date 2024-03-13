@@ -14,12 +14,18 @@ using System.Collections;
 using static Illusion.Game.Utils;
 using DBDE.KK_Plugins.DynamicBoneEditor;
 using BepInEx.Bootstrap;
+using KKAPI.Studio;
+using UnityEngine.UI;
+using ActionGame.Chara.Mover;
 
 namespace DynamicBoneDistributionEditor
 {
     public class DBDECharaController : CharaCustomFunctionController
     {
         internal Dictionary<int, List<DBDEDynamicBoneEdit>> DistributionEdits = new Dictionary<int, List<DBDEDynamicBoneEdit>>();
+
+        // used to transfer plugin data from Coordinate Load Options temp character to the real characters.
+        private static PluginData cloTransferPluginData;
 
         protected override void OnReload(GameMode currentGameMode, bool maintainState)
         {
@@ -84,29 +90,110 @@ namespace DynamicBoneDistributionEditor
             OnCoordinateBeingLoaded(ChaControl.nowCoordinate);
         }
 
+        internal IEnumerator removeCloTransferPluginData()
+        {
+            yield return null;
+            yield return null;
+            cloTransferPluginData = null;
+        }
+
         protected override void OnCoordinateBeingLoaded(ChaFileCoordinate coordinate)
         {
-            PluginData data = GetCoordinateExtendedData(coordinate);
+
+            bool loadAccessories = true;
+            bool cMode = false;
+            List<int> cloImportAccessories = new List<int>(); // slots that are loaded new
+            if (Chainloader.PluginInfos.ContainsKey("com.jim60105.kks.coordinateloadoption"))
+            {
+                DBDE.Logger.LogInfo("Coordinate Load Option dedected");
+                if (GameObject.Find("CoordinateTooglePanel")?.activeInHierarchy == true)
+                {
+                    DBDE.Logger.LogInfo("Coordinate Load Option enabled");
+                    bool? accEnabled = GameObject.Find("CoordinateTooglePanel/accessories")?.GetComponent<Toggle>()?.isOn;
+                    if (accEnabled == true)
+                    {
+                        DBDE.Logger.LogInfo("Coordinate Load Option accessory load enabled, entering compatibility mode");
+                        cMode = true;
+
+                        if (GameObject.Find("CoordinateTooglePanel/AccessoriesTooglePanel/BtnChangeAccLoadMode")?.GetComponentInChildren<Text>()?.text != "Replace Mode")
+                        {
+                            DBDE.Logger.LogMessage("DBDE WARNING: Add Mode is not supported! DBDE Data will not be loaded");
+                            loadAccessories = false;
+                        }
+
+                        GameObject list = GameObject.Find("CoordinateTooglePanel/AccessoriesTooglePanel/scroll/Viewport/Content");
+                        for (int i = 0; i < list.transform.childCount; i++)
+                        {
+                            GameObject item = list.transform.GetChild(i).gameObject;
+                            bool? isOn = item.GetComponent<Toggle>()?.isOn;
+                            bool isEmpty = item.transform.Find("Label")?.gameObject.GetComponent<Text>()?.text == "Empty";
+
+                            if (isOn == true && !isEmpty)
+                            {
+                                cloImportAccessories.Add(i);
+                            }
+                        }
+
+                    }
+                    else if (accEnabled == false)
+                    {
+                        DBDE.Logger.LogInfo("Coordinate Load Option accessory load disabled -> do not load new DBDE asset data.");
+                        loadAccessories = false;
+                    }
+                }
+            }
+
+            // Maker partial coordinate load fix
+            if (MakerAPI.InsideAndLoaded)
+            {
+                // dont load accessories if they are not loaded
+                if (GameObject.Find("cosFileControl")?.GetComponentInChildren<ChaCustom.CustomFileWindow>()?.tglCoordeLoadAcs.isOn == false) loadAccessories = false;
+            }
+
+            PluginData data = null;
+            if (cMode) // grab transfer plugindata if exists
+            {
+                if (cloTransferPluginData != null) data = cloTransferPluginData;
+                else
+                {
+                    data = cloTransferPluginData = GetCoordinateExtendedData(coordinate);
+                    if (data != null)
+                    {
+                        // remove transfer plugindata after load is finished; Coroutine cannot be started on *this* as it's being destroyed by clo too early
+                        DBDE.Instance.StartCoroutine(removeCloTransferPluginData());
+                    }
+                }
+            }
+            else data = GetCoordinateExtendedData(coordinate);
+
             PluginData DBE_data = Chainloader.PluginInfos.ContainsKey("com.deathweasel.bepinex.dynamicboneeditor") ? null : ExtendedSave.GetExtendedDataById(coordinate, "com.deathweasel.bepinex.dynamicboneeditor"); // load data from DynamicBoneEditor
             if (data == null && DBE_data == null) return;
-            List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits = null;
-            if (data != null && data.data.TryGetValue("AccessoryEdits", out var binaries) && binaries != null)
-            {
-                accessoryEdits = MessagePackSerializer.Deserialize<List<KeyValuePair<KeyValuePair<int, string>, byte[]>>>((byte[])binaries);
-            }
             List<KeyValuePair<string, byte[]>> normalEdits = null;
             if (data != null && data.data.TryGetValue("NormalEdits", out var binaries2) && binaries2 != null)
             {
                 normalEdits = MessagePackSerializer.Deserialize<List<KeyValuePair<string, byte[]>>>((byte[])binaries2);
             }
+            List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits = null;
+            if (loadAccessories && data != null && data.data.TryGetValue("AccessoryEdits", out var binaries) && binaries != null)
+            {
+                accessoryEdits = MessagePackSerializer.Deserialize<List<KeyValuePair<KeyValuePair<int, string>, byte[]>>>((byte[])binaries);
+                if (cMode && accessoryEdits.IsNullOrEmpty())
+                {
+                    accessoryEdits = accessoryEdits.Where(x => cloImportAccessories.Contains(x.Key.Key)).ToList(); // keep only edits of which the accessory slot is being loaded
+                }
+            }
             List<DynamicBoneData> DBEEdits = new List<DynamicBoneData>();
-            if (DBE_data != null && DBE_data.data.TryGetValue("AccessoryDynamicBoneData", out var binaries3) && binaries3 != null)
+            if (loadAccessories && DBE_data != null && DBE_data.data.TryGetValue("AccessoryDynamicBoneData", out var binaries3) && binaries3 != null)
             {
                 DBDE.Logger.LogInfo($"Found DynamicBoneEditor data on outfit {ChaControl.fileStatus.coordinateType}. DBDE will try to load it...");
                 DBEEdits = MessagePackSerializer.Deserialize<List<DynamicBoneData>>((byte[])binaries3);
+                if (cMode && DBEEdits.IsNullOrEmpty())
+                {
+                    DBEEdits = DBEEdits.Where(x => cloImportAccessories.Contains(x.Slot)).ToList(); // keep only edits of which the accessory slot is being loaded
+                }
             }
 
-            StartCoroutine(LoadData(ChaControl.fileStatus.coordinateType, accessoryEdits, normalEdits, DBEEdits));
+            StartCoroutine(LoadData(ChaControl.fileStatus.coordinateType, accessoryEdits, normalEdits, DBEEdits, cMode));
 
             RefreshBoneList();
             base.OnCoordinateBeingLoaded(coordinate);
@@ -142,7 +229,7 @@ namespace DynamicBoneDistributionEditor
         internal void CoordinateChangeEvent()
         {
             if (!DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType)) return;
-
+            DBDE.UI.UpdateUIWhileOpen = false;
             StartCoroutine(ApplyCurrentDelayed());
         }
 
@@ -158,10 +245,16 @@ namespace DynamicBoneDistributionEditor
             }
             RefreshBoneList();
             DistributionEdits[ChaControl.fileStatus.coordinateType].ForEach(d => d.ApplyAll());
+            DBDE.UI.UpdateUIWhileOpen = true;
         }
 
-        private IEnumerator LoadData(int outfit, List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits, List<KeyValuePair<string, byte[]>> normalEdits, List<DynamicBoneData> DBE_Data)
+        private IEnumerator LoadData(int outfit, List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits, List<KeyValuePair<string, byte[]>> normalEdits, List<DynamicBoneData> DBE_Data, bool cMode = false)
         {
+            // wait until the user switches to this coordinate
+            // else I cant create DBDEDynamicBoneEdit because I need to have the dynamic bones to do so, but they only exist after oufit is active
+            while (ChaControl.fileStatus.coordinateType != outfit)
+                yield return null; 
+            
             yield return null;
             yield return null;
 
@@ -173,10 +266,12 @@ namespace DynamicBoneDistributionEditor
 
             while (ChaControl == null || ChaControl.objHead == null)
                 yield return null;
+            
 
-            DistributionEdits.Remove(outfit);
-            DistributionEdits.Add(outfit, new List<DBDEDynamicBoneEdit>());
-            if (accessoryEdits != null || DBE_Data != null)
+            //if (!cMode) DistributionEdits.Remove(outfit); // retain data if coordinate load option is used
+            if (!DistributionEdits.ContainsKey(outfit)) DistributionEdits.Add(outfit, new List<DBDEDynamicBoneEdit>());
+            DBDE.Logger.LogInfo(DistributionEdits[outfit]);
+            if ((accessoryEdits != null || DBE_Data != null))
             {
                 if (accessoryEdits != null)
                 {
@@ -366,7 +461,7 @@ namespace DynamicBoneDistributionEditor
                 .Select(x => x.A)
                 .ToList();
 
-            DistributionEdits[outfit].ForEach(d => d.ReferToDynamicBone()); // sync all with their dynamic bones
+            // DistributionEdits[outfit].ForEach(d => d.ReferToDynamicBone()); // sync all with their dynamic bones
 
         }
 
