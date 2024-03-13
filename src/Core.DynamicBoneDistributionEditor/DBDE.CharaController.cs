@@ -315,7 +315,7 @@ namespace DynamicBoneDistributionEditor
 
             // for non accessory dynamic bones
             List<KeyValuePair<string, DynamicBone>> nonAccDBs = ChaControl.GetComponentsInChildren<DynamicBone>(true)
-                .Where(db => db.GetComponentsInParent<ChaAccessoryComponent>().IsNullOrEmpty() && db.TryGetChaControlQualifiedName(out _) && db.m_Root != null )
+                .Where(db => db.GetComponentsInParent<ChaAccessoryComponent>(true).IsNullOrEmpty() && db.TryGetChaControlQualifiedName(out _) && db.m_Root != null )
                 .Select(db => new KeyValuePair<string, DynamicBone>(db.GetChaControlQualifiedName(), db))
                 .GroupBy(pair => pair.Key)
                 .Select(group => group.First())
@@ -334,7 +334,7 @@ namespace DynamicBoneDistributionEditor
                 if (accs != null)
                 {
                     List<KeyValuePair<string, DynamicBone>> accDbs = accs.GetComponentsInChildren<DynamicBone>(true)
-                        .Where(db => db.TryGetAccessoryQualifiedName(out _) && db.m_Root != null)
+                        .Where(db => db.TryGetAccessoryQualifiedName(out string n) && !n.IsNullOrEmpty() && db.m_Root != null)
                         .Select(db => new KeyValuePair<string, DynamicBone>(db.GetAccessoryQualifiedName(), db))
                         .GroupBy(pair => pair.Key)
                         .Select(group => group.First())
@@ -354,7 +354,7 @@ namespace DynamicBoneDistributionEditor
             DistributionEdits[outfit].RemoveAll(a => a.DynamicBone == null);
 
             // == order list so that it matches the output of GetComponentsInChildren()
-            DynamicBone[] foundDBs = ChaControl.GetComponentsInChildren<DynamicBone>();
+            DynamicBone[] foundDBs = ChaControl.GetComponentsInChildren<DynamicBone>(true);
             // AI generated this, idk if this works...
             DistributionEdits[outfit] = DistributionEdits[outfit]
                 .Join(foundDBs.Select(
@@ -390,6 +390,7 @@ namespace DynamicBoneDistributionEditor
                     .GroupBy(pair => pair.Key)
                     .Select(group => group.First().Value)
                     .ToList();
+
 
             if (searchList.IsNullOrEmpty()) return null;
             if (searchList.Count > 1) DBDE.Logger.LogWarning($"WARNING: Ambiguous result for dynamic bone with qualified name {name} and slot {slot}. Using first value in list, this might cause issues!!");
