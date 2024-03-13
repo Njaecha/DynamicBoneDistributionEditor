@@ -147,6 +147,7 @@ namespace DynamicBoneDistributionEditor
             if (MakerAPI.InsideAndLoaded)
             {
                 // dont load accessories if they are not loaded
+                DBDE.Logger.LogInfo("Coordinate Load Option accessory load disabled -> do not load new DBDE asset data.");
                 if (GameObject.Find("cosFileControl")?.GetComponentInChildren<ChaCustom.CustomFileWindow>()?.tglCoordeLoadAcs.isOn == false) loadAccessories = false;
             }
 
@@ -167,7 +168,7 @@ namespace DynamicBoneDistributionEditor
             else data = GetCoordinateExtendedData(coordinate);
 
             PluginData DBE_data = Chainloader.PluginInfos.ContainsKey("com.deathweasel.bepinex.dynamicboneeditor") ? null : ExtendedSave.GetExtendedDataById(coordinate, "com.deathweasel.bepinex.dynamicboneeditor"); // load data from DynamicBoneEditor
-            if (data == null && DBE_data == null) return;
+            if (data == null && DBE_data == null && (!DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType) || DistributionEdits[ChaControl.fileStatus.coordinateType].IsNullOrEmpty())) return;
             List<KeyValuePair<string, byte[]>> normalEdits = null;
             if (data != null && data.data.TryGetValue("NormalEdits", out var binaries2) && binaries2 != null)
             {
@@ -321,7 +322,11 @@ namespace DynamicBoneDistributionEditor
                 }
             }
 
-            DistributionEdits[ChaControl.fileStatus.coordinateType].ForEach(d => d.ApplyAll());
+            DBDE.Logger.LogDebug($"Applying Data for outfit {outfit} on character {ChaControl.chaFile.GetFancyCharacterName()}");
+            for (int i = 0; i < DistributionEdits[outfit].Count; i++)
+            {
+                DistributionEdits[outfit][i].ApplyAll();
+            }
         }
 
         internal void AccessoryChangedEvent(int slot)
