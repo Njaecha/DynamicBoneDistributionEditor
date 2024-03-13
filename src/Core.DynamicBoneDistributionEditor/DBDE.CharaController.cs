@@ -105,14 +105,14 @@ namespace DynamicBoneDistributionEditor
             List<int> cloImportAccessories = new List<int>(); // slots that are loaded new
             if (Chainloader.PluginInfos.ContainsKey("com.jim60105.kks.coordinateloadoption"))
             {
-                DBDE.Logger.LogInfo("Coordinate Load Option dedected");
+                DBDE.Logger.LogDebug("Coordinate Load Option dedected");
                 if (GameObject.Find("CoordinateTooglePanel")?.activeInHierarchy == true)
                 {
-                    DBDE.Logger.LogInfo("Coordinate Load Option enabled");
+                    DBDE.Logger.LogDebug("Coordinate Load Option enabled");
                     bool? accEnabled = GameObject.Find("CoordinateTooglePanel/accessories")?.GetComponent<Toggle>()?.isOn;
                     if (accEnabled == true)
                     {
-                        DBDE.Logger.LogInfo("Coordinate Load Option accessory load enabled, entering compatibility mode");
+                        DBDE.Logger.LogDebug("Coordinate Load Option accessory load enabled, entering compatibility mode");
                         cMode = true;
 
                         if (GameObject.Find("CoordinateTooglePanel/AccessoriesTooglePanel/BtnChangeAccLoadMode")?.GetComponentInChildren<Text>()?.text != "Replace Mode")
@@ -137,7 +137,7 @@ namespace DynamicBoneDistributionEditor
                     }
                     else if (accEnabled == false)
                     {
-                        DBDE.Logger.LogInfo("Coordinate Load Option accessory load disabled -> do not load new DBDE asset data.");
+                        DBDE.Logger.LogDebug("Coordinate Load Option accessory load disabled -> do not load new DBDE asset data.");
                         loadAccessories = false;
                     }
                 }
@@ -147,7 +147,7 @@ namespace DynamicBoneDistributionEditor
             if (MakerAPI.InsideAndLoaded)
             {
                 // dont load accessories if they are not loaded
-                DBDE.Logger.LogInfo("Coordinate Load Option accessory load disabled -> do not load new DBDE asset data.");
+                DBDE.Logger.LogDebug("Coordinate Load Option accessory load disabled -> do not load new DBDE asset data.");
                 if (GameObject.Find("cosFileControl")?.GetComponentInChildren<ChaCustom.CustomFileWindow>()?.tglCoordeLoadAcs.isOn == false) loadAccessories = false;
             }
 
@@ -193,10 +193,9 @@ namespace DynamicBoneDistributionEditor
                     DBEEdits = DBEEdits.Where(x => cloImportAccessories.Contains(x.Slot)).ToList(); // keep only edits of which the accessory slot is being loaded
                 }
             }
-
+            DBDE.UI.Close();
             StartCoroutine(LoadData(ChaControl.fileStatus.coordinateType, accessoryEdits, normalEdits, DBEEdits, cMode));
-
-            RefreshBoneList();
+            RefreshBoneList(!loadAccessories);
             base.OnCoordinateBeingLoaded(coordinate);
         }
 
@@ -267,17 +266,16 @@ namespace DynamicBoneDistributionEditor
 
             while (ChaControl == null || ChaControl.objHead == null)
                 yield return null;
-            
 
-            //if (!cMode) DistributionEdits.Remove(outfit); // retain data if coordinate load option is used
             if (!DistributionEdits.ContainsKey(outfit)) DistributionEdits.Add(outfit, new List<DBDEDynamicBoneEdit>());
-            DBDE.Logger.LogInfo(DistributionEdits[outfit]);
+
             if ((accessoryEdits != null || DBE_Data != null))
             {
                 if (accessoryEdits != null)
                 {
                     foreach(var x in accessoryEdits)
                     {
+                        if (!DistributionEdits[outfit].IsNullOrEmpty()) DistributionEdits[outfit].RemoveAll(d => d.ReidentificationData.Equals(x.Key)); // remove old Edit so that new one can take its place
                         if (DBE_Data != null)
                         {
                             List<DynamicBoneData> searchResults = DBE_Data.FindAll(data => outfit == data.CoordinateIndex && x.Key.Key == data.Slot && x.Key.Value.EndsWith(data.BoneName));
@@ -309,6 +307,7 @@ namespace DynamicBoneDistributionEditor
 
                         int slot = data.Slot;
                         string qName = foundDBs[0].GetAccessoryQualifiedName();
+                        if (!DistributionEdits[outfit].IsNullOrEmpty()) DistributionEdits[outfit].RemoveAll(d => d.ReidentificationData is KeyValuePair<int, string> kvp && kvp.Key == slot && kvp.Value == qName); // remove old Edit so that new one can take its place
                         if (qName.IsNullOrEmpty()) DBDE.Logger.LogError($"Couldn't retrive Accessory Qualified Name for DynamicBone with BasicName={data.BoneName} on Slot {data.Slot}  (Outfit {outfit}). Skipping Entry.");
                         else DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(qName, slot), null, data) { ReidentificationData = new KeyValuePair<int, string>(slot, qName) }); // new Edit with only DBE data
                     }
@@ -318,6 +317,7 @@ namespace DynamicBoneDistributionEditor
             {
                 foreach(var x in normalEdits)
                 {
+                    if (!DistributionEdits[outfit].IsNullOrEmpty()) DistributionEdits[outfit].RemoveAll(d => d.ReidentificationData.Equals(x.Key)); // remove old Edit so that new one can take its place
                     DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key), x.Value) { ReidentificationData = x.Key });
                 }
             }
@@ -391,7 +391,7 @@ namespace DynamicBoneDistributionEditor
         public void OpenDBDE()
         {
             RefreshBoneList();
-            DBDE.UI.Open(() => DistributionEdits[ChaControl.fileStatus.coordinateType], RefreshBoneList);
+            DBDE.UI.Open(() => DistributionEdits[ChaControl.fileStatus.coordinateType], () => RefreshBoneList());
             DBDE.UI.TitleAppendix = ChaControl.chaFile.GetFancyCharacterName();
         }
 
@@ -401,9 +401,12 @@ namespace DynamicBoneDistributionEditor
             RefreshBoneList();
         }
 
-        private void RefreshBoneList()
+        private void RefreshBoneList(bool removeDeadOnes = true)
         {
             int outfit = ChaControl.fileStatus.coordinateType;
+
+            DBDE.Logger.LogDebug($"Refreshing Bone List on {ChaControl.chaFile.GetFancyCharacterName()} - Outfit {outfit} | removeDead {removeDeadOnes}");
+
             if (!DistributionEdits.ContainsKey(outfit))
             {
                 DistributionEdits.Add(outfit, new List<DBDEDynamicBoneEdit>());
@@ -451,8 +454,9 @@ namespace DynamicBoneDistributionEditor
 
 
             // == remove DBDEDynamicBoneEdits whose dynamic bones could not be found anymore.
-            DistributionEdits[outfit].RemoveAll(a => a.DynamicBone == null);
+            if (removeDeadOnes) DistributionEdits[outfit].RemoveAll(a => a.DynamicBone == null);
 
+            /*
             // == order list so that it matches the output of GetComponentsInChildren()
             DynamicBone[] foundDBs = ChaControl.GetComponentsInChildren<DynamicBone>(true);
             // AI generated this, idk if this works...
@@ -465,7 +469,7 @@ namespace DynamicBoneDistributionEditor
                 .OrderBy(x => x.Index)
                 .Select(x => x.A)
                 .ToList();
-
+            */
             // DistributionEdits[outfit].ForEach(d => d.ReferToDynamicBone()); // sync all with their dynamic bones
 
         }
