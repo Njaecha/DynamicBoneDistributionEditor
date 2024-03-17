@@ -397,19 +397,20 @@ namespace DynamicBoneDistributionEditor
 
         internal void UpdateActiveStack(bool always = false)
         {
-            if ((DynamicBones.Count > 1 || always) && active)
+            List<DynamicBone> DBS = DynamicBones;
+            if (DBS.IsNullOrEmpty()) return;
+            if ((DBS.Count > 1 || always) && active)
             {
-                if (DynamicBones.IsNullOrEmpty()) return;
                 List<int> indeces = new List<int>();
-                for (int i = 0; i < DynamicBones.Count; i++)
+                for (int i = 0; i < DBS.Count; i++)
                 {
-                    if (DynamicBones[i] == null) continue;
-                    if (DynamicBones[i].gameObject.activeInHierarchy) indeces.Add(i);
+                    if (DBS[i] == null) continue;
+                    if (DBS[i].gameObject.activeInHierarchy) indeces.Add(i);
                 }
                 if (indeces.IsNullOrEmpty()) return;
-                DynamicBones[indeces[0]].enabled = true; //enable first one
+                DBS[indeces[0]].enabled = true; //enable first one
                 indeces.RemoveAt(0);
-                foreach (int i in indeces) DynamicBones[i].enabled = false; //enable first disable others
+                foreach (int i in indeces) DBS[i].enabled = false; //enable first disable others
             }
         }
 
