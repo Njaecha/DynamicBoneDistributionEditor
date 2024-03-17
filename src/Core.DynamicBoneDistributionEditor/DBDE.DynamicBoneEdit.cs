@@ -32,7 +32,13 @@ namespace DynamicBoneDistributionEditor
         public bool active {get => _active; set => SetActive(value); }
 
         private DynamicBone _primary;
-        public DynamicBone PrimaryDynamicBone { get { if (_primary == null) _primary = DynamicBones[0]; return _primary; } private set => _primary = value; }
+        public DynamicBone PrimaryDynamicBone { get { 
+                if (_primary == null)
+                {
+                    _primary = DynamicBones.FirstOrDefault();
+                } 
+                return _primary; 
+            } private set => _primary = value; }
         public List<DynamicBone> DynamicBones
         {
             get

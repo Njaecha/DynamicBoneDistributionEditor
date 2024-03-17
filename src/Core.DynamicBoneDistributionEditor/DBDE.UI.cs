@@ -197,7 +197,7 @@ namespace DynamicBoneDistributionEditor
             ace.Init(curve, lastUsedAceRect, 2, 0, 0.5f);
             ace.enabled = true;
             ace.borderingKeyframesDeletable = false;
-            ace.displayName = Editing.PrimaryDynamicBone.m_Root.name + " - " + DistribKindNames[num];
+            ace.displayName = Editing.GetButtonName() + " - " + DistribKindNames[num];
             ace.KeyframeEdited = new EventHandler<KeyframeEditedArgs>((object o, KeyframeEditedArgs e) =>
             {
                 Editing.SetAnimationCurve(num, e.curve);
@@ -220,7 +220,11 @@ namespace DynamicBoneDistributionEditor
             DBDEDynamicBoneEdit Editing = DBDES[boneIndex];
             if (Editing == null) return;
             DynamicBone db = Editing.PrimaryDynamicBone;
-            if (db == null) return;
+            if (db == null)
+            {
+                RefreshBoneList.Invoke();
+                return;
+            }
             currentIndex = boneIndex;
             BaseValueWrappers = new BaseValueEditWrapper[]
             {
@@ -255,6 +259,12 @@ namespace DynamicBoneDistributionEditor
             Color guic = GUI.color;
             #endregion
             List<DBDEDynamicBoneEdit> DBDES = DBDEGetter.Invoke();
+            if (DBDES.IsNullOrEmpty())
+            {
+                RefreshBoneList.Invoke();
+                close();
+                return;
+            }
 
             if (GUI.Button(new Rect(windowRect.width - 18, 2, 15, 15), new GUIContent("X"), buttonStyle))
             {
@@ -283,6 +293,7 @@ namespace DynamicBoneDistributionEditor
             for (int i = 0; i < DBDES.Count; i++)
             {
                 DBDEDynamicBoneEdit DBEdit = DBDES[i];
+                if (DBEdit == null) continue;
                 if (!filterText.IsNullOrEmpty() && !DBEdit.GetButtonName().ToLower().Contains(filterText.ToLower())) continue;
                 GUILayout.BeginHorizontal();
                 GUI.color = currentIndex == i ? Color.cyan : DBEdit.IsEdited() ? Color.magenta : guic;
@@ -312,6 +323,18 @@ namespace DynamicBoneDistributionEditor
             #region Right Side
 
             DBDEDynamicBoneEdit Editing = DBDES[currentIndex];
+            if (Editing == null)
+            {
+                RefreshBoneList.Invoke();
+                close();
+                return;
+            }
+            if (Editing.PrimaryDynamicBone == null)
+            {
+                RefreshBoneList.Invoke();
+                close();
+                return;
+            }
 
             if (UpdateUIWhileOpen)
             {

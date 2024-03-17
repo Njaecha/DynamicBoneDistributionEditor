@@ -33,7 +33,7 @@ namespace DynamicBoneDistributionEditor
         void OnPostRender()
         {
             if (!DBDE.drawGizmos.Value) return;
-            if (Editing == null || Editing.DynamicBones == null || Editing.PrimaryDynamicBone?.m_Root == null) return;
+            if (Editing == null || Editing.PrimaryDynamicBone == null || Editing.PrimaryDynamicBone?.m_Root == null) return;
             _gizmoMaterial.SetPass(0);
             GL.PushMatrix();
             GL.MultMatrix(Matrix4x4.identity);
