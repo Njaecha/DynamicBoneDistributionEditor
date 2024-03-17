@@ -8,6 +8,7 @@ using UnityEngine;
 using static AnimationCurveEditor.AnimationCurveEditor;
 using static AnimationCurveEditor.AnimationCurveEditor.KeyframeEditedArgs;
 using static Illusion.Utils;
+using System.Linq;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -168,10 +169,35 @@ namespace DynamicBoneDistributionEditor
         {
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>();
             if (currentEdit.HasValue) lastUsedAceRect = ace.rect; // if ACE is already opened before this method was called.
+
+            // normalise curve if needed
+            if (curve.GetKeys()[0].time > 0)
+            {
+                Keyframe x = curve.GetKeys()[0];
+#if KK
+                curve.MoveKey(0, new Keyframe(x.time, x.value, 0, x.outTangent));
+#elif KKS
+                curve.MoveKey(0, new Keyframe(x.time, x.value, 0, x.outTangent, 0.1f, x.outWeight));
+#endif
+                float v = curve.Evaluate(0);
+                curve.AddKey(new Keyframe(0, v));
+            }
+            if (curve.GetKeys()[curve.GetKeys().Count() - 1].time < 1)
+            {
+                Keyframe x = curve.GetKeys()[curve.GetKeys().Count() - 1];
+#if KK
+                curve.MoveKey(curve.GetKeys().Count() - 1, new Keyframe(x.time, x.value, x.inTangent, 0));
+#elif KKS
+                curve.MoveKey(curve.GetKeys().Count() - 1, new Keyframe(x.time, x.value, x.inTangent, 0, x.inWeight, 0.1f));
+#endif
+                float v = curve.Evaluate(1);
+                curve.AddKey(new Keyframe(1, v));
+            }
+
             ace.Init(curve, lastUsedAceRect, 2, 0, 0.5f);
             ace.enabled = true;
             ace.borderingKeyframesDeletable = false;
-            ace.displayName = Editing.DynamicBone.m_Root.name + " - " + DistribKindNames[num];
+            ace.displayName = Editing.PrimaryDynamicBone.m_Root.name + " - " + DistribKindNames[num];
             ace.KeyframeEdited = new EventHandler<KeyframeEditedArgs>((object o, KeyframeEditedArgs e) =>
             {
                 Editing.SetAnimationCurve(num, e.curve);
@@ -193,7 +219,7 @@ namespace DynamicBoneDistributionEditor
             if (DBDES.IsNullOrEmpty()) return;
             DBDEDynamicBoneEdit Editing = DBDES[boneIndex];
             if (Editing == null) return;
-            DynamicBone db = Editing.DynamicBone;
+            DynamicBone db = Editing.PrimaryDynamicBone;
             if (db == null) return;
             currentIndex = boneIndex;
             BaseValueWrappers = new BaseValueEditWrapper[]

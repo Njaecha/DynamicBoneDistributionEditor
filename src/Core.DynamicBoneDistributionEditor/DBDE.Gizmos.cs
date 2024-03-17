@@ -1,6 +1,7 @@
 ﻿using ADV.Commands.Base;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -32,14 +33,14 @@ namespace DynamicBoneDistributionEditor
         void OnPostRender()
         {
             if (!DBDE.drawGizmos.Value) return;
-            if (Editing == null || Editing.DynamicBone == null || Editing.DynamicBone.m_Root == null) return;
+            if (Editing == null || Editing.DynamicBones == null || Editing.PrimaryDynamicBone?.m_Root == null) return;
             _gizmoMaterial.SetPass(0);
             GL.PushMatrix();
             GL.MultMatrix(Matrix4x4.identity);
 
             GL.Begin( GL.LINE_STRIP );
             GL.Color(Color.magenta);
-            Transform leaf = traverseBones(Editing.DynamicBone.m_Root.transform);
+            Transform leaf = traverseBones(Editing.PrimaryDynamicBone.m_Root.transform);
             GL.End();
 
             Vector3 gTip = drawArrow(leaf.position, Editing.gravity.value, Color.blue, 50);

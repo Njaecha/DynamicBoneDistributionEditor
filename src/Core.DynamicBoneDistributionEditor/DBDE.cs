@@ -31,7 +31,7 @@ namespace DynamicBoneDistributionEditor
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "1.1.0";
+        public const string Version = "1.2.0";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
@@ -188,7 +188,7 @@ namespace DynamicBoneDistributionEditor
                 value = null; return false;
             }
             if (cacheA.TryGetValue(dynamicBone, out value) && value.EndsWith(dynamicBone.m_Root.name)) return true;
-            ChaAccessoryComponent component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaAccessoryComponent>(true)?[0];
+            ChaAccessoryComponent component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaAccessoryComponent>(true)?.FirstOrDefault();
             if (component == null) return false;
             string rootBonePath = dynamicBone.m_Root.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
@@ -223,7 +223,7 @@ namespace DynamicBoneDistributionEditor
                 value = null; return false;
             }
             if (cacheC.TryGetValue(dynamicBone, out value) && value.EndsWith(dynamicBone.m_Root.name)) return true;
-            ChaControl component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaControl>(true)?[0];
+            ChaControl component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaControl>(true)?.FirstOrDefault();
             if (component == null) return false;
             string rootBonePath = dynamicBone.m_Root?.transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");

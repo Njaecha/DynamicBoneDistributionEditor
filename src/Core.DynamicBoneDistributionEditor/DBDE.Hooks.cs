@@ -14,5 +14,41 @@ namespace DynamicBoneDistributionEditor
         {
             __instance.GetComponent<DBDECharaController>()?.CoordinateChangeEvent();
         }
+
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesBot))]
+        private static void ChangeClothsBotPostfix(ChaControl __instance)
+        {
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+        }
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesBra))]
+        private static void ChangeClothsBraPostfix(ChaControl __instance)
+        {
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+        }
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesGloves))]
+        private static void ChangeClothsGlovesPostfix(ChaControl __instance)
+        {
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+        }
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesPanst))]
+        private static void ChangeClothsPanstPostfix(ChaControl __instance)
+        {
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+        }
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesShoes))]
+        private static void ChangeClothsShoesPostfix(ChaControl __instance)
+        {
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+        }
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesTop))]
+        private static void ChangeClothsSocksPostfix(ChaControl __instance)
+        {
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+        }
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesShoes))]
+        private static void ChangeClothsTopPostfix(ChaControl __instance)
+        {
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+        }
     }
 }

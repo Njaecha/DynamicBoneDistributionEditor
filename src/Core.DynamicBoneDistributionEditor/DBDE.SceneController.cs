@@ -38,9 +38,9 @@ namespace DynamicBoneDistributionEditor
             StartCoroutine(SceneLoadDelayed(loadedItems));
         }
 
-        internal DynamicBone GetDynamicBone(int key, int index)
+        internal List<DynamicBone> GetDynamicBone(int key, int index)
         {
-            if (Studio.Studio.Instance.dicObjectCtrl.TryGetValue(key, out var oci) && oci is OCIItem item && item.dynamicBones.Count() > index) return item.dynamicBones[index];
+            if (Studio.Studio.Instance.dicObjectCtrl.TryGetValue(key, out var oci) && oci is OCIItem item && item.dynamicBones.Count() > index) return new List<DynamicBone>() { item.dynamicBones[index] };
             return null;
         }
 

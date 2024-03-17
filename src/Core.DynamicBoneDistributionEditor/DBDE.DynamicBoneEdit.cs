@@ -6,6 +6,7 @@ using UnityEngine;
 using MessagePack;
 using KKAPI.Utilities;
 using DBDE.KK_Plugins.DynamicBoneEditor;
+using UniRx;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -29,18 +30,29 @@ namespace DynamicBoneDistributionEditor
 
         private bool _active;
         public bool active {get => _active; set => SetActive(value); }
- 
-		public DynamicBone DynamicBone { get => DynamicBoneAccessor.Invoke(); }
-		internal Func<DynamicBone> AccessorFunciton { get => DynamicBoneAccessor; }
-		private readonly Func<DynamicBone> DynamicBoneAccessor;
 
-		internal object ReidentificationData;
+        private DynamicBone _primary;
+        public DynamicBone PrimaryDynamicBone { get { if (_primary == null) _primary = DynamicBones[0]; return _primary; } private set => _primary = value; }
+        public List<DynamicBone> DynamicBones
+        {
+            get
+            {
+                var x = AccessorFunciton.Invoke();
+                if (x.IsNullOrEmpty()) return new List<DynamicBone>();
+                else return x;
+            }
+        }
+
+        internal Func<List<DynamicBone>> AccessorFunciton { get; private set; }
+
+
+        internal object ReidentificationData;
 
         internal string GetButtonName()
         {
             string n = "";
             if (ReidentificationData is KeyValuePair<int, string> kvp) n = $"Slot {kvp.Key + 1} - ";
-            return n + DynamicBone?.m_Root?.name;
+            return n + PrimaryDynamicBone?.m_Root?.name;
         }
 
 		private Keyframe[] getDefaultCurveKeyframes()
@@ -65,10 +77,15 @@ namespace DynamicBoneDistributionEditor
             ApplyAll();
         }
 
-		public DBDEDynamicBoneEdit(Func<DynamicBone> DynamicBoneAccessor, DBDEDynamicBoneEdit copyFrom)
+		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> AccessorFunciton, DBDEDynamicBoneEdit copyFrom)
 		{
-            this.DynamicBoneAccessor = DynamicBoneAccessor;
-            DynamicBone db = DynamicBone;
+            this.AccessorFunciton = AccessorFunciton;
+            DynamicBone db = PrimaryDynamicBone = DynamicBones.FirstOrDefault();
+            if (db == null)
+            {
+                DBDE.Logger.LogError("Creating DBDEDynamicBoneEdit failed, Accessor returned zero Dynamic Bones!");
+                return;
+            }
 
             _active = db.enabled;
             this.distributions = new EditableValue<Keyframe[]>[]
@@ -96,11 +113,16 @@ namespace DynamicBoneDistributionEditor
             PasteData(copyFrom);
         }
 
-		public DBDEDynamicBoneEdit(Func<DynamicBone> DynamicBoneAccessor, byte[] serialised = null, DynamicBoneData DBE = null)
+		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> AccessorFunciton, byte[] serialised = null, DynamicBoneData DBE = null)
 		{
-            this.DynamicBoneAccessor = DynamicBoneAccessor;
-			DynamicBone db = DynamicBone;
-            if (db == null) return;
+            this.AccessorFunciton = AccessorFunciton;
+            DynamicBone db = PrimaryDynamicBone = DynamicBones.FirstOrDefault();
+            if (db == null)
+            {
+                DBDE.Logger.LogError("Creating DBDEDynamicBoneEdit failed, Accessor returned zero Dynamic Bones!");
+                return;
+            }
+
             _active = db.enabled;
 			this.distributions = new EditableValue<Keyframe[]>[]
 			{
@@ -191,10 +213,10 @@ namespace DynamicBoneDistributionEditor
 
         internal void ReferToDynamicBone()
         {
-            DynamicBone db = DynamicBone;
+            DynamicBone db = PrimaryDynamicBone;
             if (db == null ) return;
 
-            _active = db.enabled;
+            _active = DynamicBones.Any(d => d.enabled);
 
             distributions[0].value = (db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes());
             distributions[1].value = (db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes());
@@ -213,6 +235,8 @@ namespace DynamicBoneDistributionEditor
             endOffset.value = (db.m_EndOffset);
 
             freezeAxis.value = (db.m_FreezeAxis);
+
+            ApplyAll();
         }
 
         private void LoadVector(byte[] binary, ref EditableValue<Vector3> editableValue)
@@ -229,7 +253,7 @@ namespace DynamicBoneDistributionEditor
 
         public void SetActive(bool active)
         {
-            DynamicBone.enabled = active;
+            DynamicBones.ForEach(db => db.enabled = active);
             _active = active;
         }
 
@@ -365,6 +389,24 @@ namespace DynamicBoneDistributionEditor
 			return false;
 		}
 
+        internal void UpdateActiveStack(bool always = false)
+        {
+            if ((DynamicBones.Count > 1 || always) && active)
+            {
+                if (DynamicBones.IsNullOrEmpty()) return;
+                List<int> indeces = new List<int>();
+                for (int i = 0; i < DynamicBones.Count; i++)
+                {
+                    if (DynamicBones[i] == null) continue;
+                    if (DynamicBones[i].gameObject.activeInHierarchy) indeces.Add(i);
+                }
+                if (indeces.IsNullOrEmpty()) return;
+                DynamicBones[indeces[0]].enabled = true; //enable first one
+                indeces.RemoveAt(0);
+                foreach (int i in indeces) DynamicBones[i].enabled = false; //enable first disable others
+            }
+        }
+
         public void ApplyAll()
         {
             ApplyDistribution();
@@ -387,224 +429,265 @@ namespace DynamicBoneDistributionEditor
 
 		public void ApplyDistribution(int? kind = null)
 		{
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-			if (kind.HasValue)
-			{
-				Keyframe[] keys = distributions[kind.Value];
-				switch (kind.Value)
-				{
-					case 0:
-						if (db.m_DampingDistrib == null) DynamicBone.m_DampingDistrib = new AnimationCurve(keys);
-						else db.m_DampingDistrib.SetKeys(keys);
-						break;
-					case 1:
-                        if (db.m_ElasticityDistrib == null) DynamicBone.m_ElasticityDistrib = new AnimationCurve(keys);
-                        else db.m_ElasticityDistrib.SetKeys(keys);
-                        break;
-					case 2:
-                        if (db.m_InertDistrib == null) DynamicBone.m_InertDistrib = new AnimationCurve(keys);
-                        else db.m_InertDistrib.SetKeys(keys);
-                        break;
-					case 3:
-                        if (db.m_RadiusDistrib == null) DynamicBone.m_RadiusDistrib = new AnimationCurve(keys);
-                        else db.m_RadiusDistrib.SetKeys(keys);
-                        break;
-					case 4:
-                        if (db.m_StiffnessDistrib == null) DynamicBone.m_StiffnessDistrib = new AnimationCurve(keys);
-                        else db.m_StiffnessDistrib.SetKeys(keys);
-                        break;
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                if (db == null) return;
+			    if (kind.HasValue)
+			    {
+				    Keyframe[] keys = distributions[kind.Value];
+				    switch (kind.Value)
+				    {
+					    case 0:
+						    if (db.m_DampingDistrib == null) db.m_DampingDistrib = new AnimationCurve(keys);
+						    else db.m_DampingDistrib.SetKeys(keys);
+						    break;
+					    case 1:
+                            if (db.m_ElasticityDistrib == null) db.m_ElasticityDistrib = new AnimationCurve(keys);
+                            else db.m_ElasticityDistrib.SetKeys(keys);
+                            break;
+					    case 2:
+                            if (db.m_InertDistrib == null) db.m_InertDistrib = new AnimationCurve(keys);
+                            else db.m_InertDistrib.SetKeys(keys);
+                            break;
+					    case 3:
+                            if (db.m_RadiusDistrib == null) db.m_RadiusDistrib = new AnimationCurve(keys);
+                            else db.m_RadiusDistrib.SetKeys(keys);
+                            break;
+					    case 4:
+                            if (db.m_StiffnessDistrib == null) db.m_StiffnessDistrib = new AnimationCurve(keys);
+                            else db.m_StiffnessDistrib.SetKeys(keys);
+                            break;
+                    }
+			    }
+			    else
+			    {
+				    if (db.m_DampingDistrib == null) db.m_DampingDistrib = new AnimationCurve(distributions[0]);
+				    else db.m_DampingDistrib.SetKeys(distributions[0]);
+                    if (db.m_ElasticityDistrib == null) db.m_ElasticityDistrib = new AnimationCurve(distributions[1]);
+                    else db.m_ElasticityDistrib.SetKeys(distributions[1]);
+                    if (db.m_InertDistrib == null) db.m_InertDistrib = new AnimationCurve(distributions[2]);
+                    else db.m_InertDistrib.SetKeys(distributions[2]);
+                    if (db.m_RadiusDistrib == null) db.m_RadiusDistrib = new AnimationCurve(distributions[3]);
+                    else db.m_RadiusDistrib.SetKeys(distributions[3]);
+                    if (db.m_StiffnessDistrib == null) db.m_StiffnessDistrib = new AnimationCurve(distributions[4]);
+                    else db.m_StiffnessDistrib.SetKeys(distributions[4]);
                 }
-			}
-			else
-			{
-				if (db.m_DampingDistrib == null) DynamicBone.m_DampingDistrib = new AnimationCurve(distributions[0]);
-				else db.m_DampingDistrib.SetKeys(distributions[0]);
-                if (db.m_ElasticityDistrib == null) DynamicBone.m_ElasticityDistrib = new AnimationCurve(distributions[1]);
-                else db.m_ElasticityDistrib.SetKeys(distributions[1]);
-                if (db.m_InertDistrib == null) DynamicBone.m_InertDistrib = new AnimationCurve(distributions[2]);
-                else db.m_InertDistrib.SetKeys(distributions[2]);
-                if (db.m_RadiusDistrib == null) DynamicBone.m_RadiusDistrib = new AnimationCurve(distributions[3]);
-                else db.m_RadiusDistrib.SetKeys(distributions[3]);
-                if (db.m_StiffnessDistrib == null) DynamicBone.m_StiffnessDistrib = new AnimationCurve(distributions[4]);
-                else db.m_StiffnessDistrib.SetKeys(distributions[4]);
+                db.UpdateParticles();
             }
-            db.UpdateParticles();
-		}
+            UpdateActiveStack();
+
+        }
 
         public void ResetDistribution(int? kind = null)
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-            if (kind.HasValue)
+            for (int j = 0; j < DynamicBones.Count; j++)
             {
-                distributions[kind.Value].Reset();
-                Keyframe[] keys = distributions[kind.Value].value;
-                switch (kind.Value)
+                DynamicBone db = DynamicBones[j];
+                if (db == null) return;
+                if (kind.HasValue)
                 {
-                    case 0:
-                        db.m_DampingDistrib?.SetKeys(keys);
-                        break;
-                    case 1:
-                        db.m_ElasticityDistrib?.SetKeys(keys);
-                        break;
-                    case 2:
-                        db.m_InertDistrib?.SetKeys(keys);
-                        break;
-                    case 3:
-                        db.m_RadiusDistrib?.SetKeys(keys);
-                        break;
-                    case 4:
-                        db.m_StiffnessDistrib?.SetKeys(keys);
-                        break;
+                    distributions[kind.Value].Reset();
+                    Keyframe[] keys = distributions[kind.Value].value;
+                    switch (kind.Value)
+                    {
+                        case 0:
+                            db.m_DampingDistrib?.SetKeys(keys);
+                            break;
+                        case 1:
+                            db.m_ElasticityDistrib?.SetKeys(keys);
+                            break;
+                        case 2:
+                            db.m_InertDistrib?.SetKeys(keys);
+                            break;
+                        case 3:
+                            db.m_RadiusDistrib?.SetKeys(keys);
+                            break;
+                        case 4:
+                            db.m_StiffnessDistrib?.SetKeys(keys);
+                            break;
+                    }
                 }
+                else
+                {
+                    for (int i = 0; i < distributions.Length; i++) distributions[i].Reset();
+                    db.m_DampingDistrib?.SetKeys(distributions[0]);
+                    db.m_ElasticityDistrib?.SetKeys(distributions[1]);
+                    db.m_InertDistrib?.SetKeys(distributions[2]);
+                    db.m_RadiusDistrib?.SetKeys(distributions[3]);
+                    db.m_StiffnessDistrib?.SetKeys(distributions[4]);
+                }
+                db.UpdateParticles();
             }
-            else
-            {
-                for (int i = 0; i < distributions.Length; i++) distributions[i].Reset();
-                db.m_DampingDistrib?.SetKeys(distributions[0]);
-                db.m_ElasticityDistrib?.SetKeys(distributions[1]);
-                db.m_InertDistrib?.SetKeys(distributions[2]);
-                db.m_RadiusDistrib?.SetKeys(distributions[3]);
-                db.m_StiffnessDistrib?.SetKeys(distributions[4]);
-            }
-            db.UpdateParticles();
+            UpdateActiveStack();
         }
 
         public void ApplyBaseValues(int? kind = null)
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-            if (kind.HasValue)
+            for (int i = 0; i < DynamicBones.Count; i++)
             {
-                float value = baseValues[kind.Value];
-                switch (kind.Value)
+                DynamicBone db = DynamicBones[i];
+                if (db == null) return;
+                if (kind.HasValue)
                 {
-                    case 0:
-                        db.m_Damping = value;
-                        break;
-                    case 1:
-                        db.m_Elasticity = value;
-                        break;
-                    case 2:
-                        db.m_Inert = value;
-                        break;
-                    case 3:
-                        db.m_Radius = value;
-                        break;
-                    case 4:
-                        db.m_Stiffness = value;
-                        break;
+                    float value = baseValues[kind.Value];
+                    switch (kind.Value)
+                    {
+                        case 0:
+                            db.m_Damping = value;
+                            break;
+                        case 1:
+                            db.m_Elasticity = value;
+                            break;
+                        case 2:
+                            db.m_Inert = value;
+                            break;
+                        case 3:
+                            db.m_Radius = value;
+                            break;
+                        case 4:
+                            db.m_Stiffness = value;
+                            break;
+                    }
                 }
+                else
+                {
+                    db.m_Damping = baseValues[0];
+                    db.m_Elasticity = baseValues[1];
+                    db.m_Inert = baseValues[2];
+                    db.m_Radius = baseValues[3];
+                    db.m_Stiffness = baseValues[4];
+                }
+                db.UpdateParticles();
             }
-            else
-            {
-                db.m_Damping = baseValues[0];
-                db.m_Elasticity = baseValues[1];
-                db.m_Inert = baseValues[2];
-                db.m_Radius = baseValues[3];
-                db.m_Stiffness = baseValues[4];
-            }
-            db.UpdateParticles();
+            UpdateActiveStack();
         }
 
         public void ResetBaseValues(int? kind = null)
 		{
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-            if (kind.HasValue)
+            for (int j = 0; j < DynamicBones.Count; j++)
             {
-                baseValues[kind.Value].Reset();
-                float value = baseValues[kind.Value].value;
-                switch (kind.Value)
+                DynamicBone db = DynamicBones[j];
+                if (db == null) return;
+                if (kind.HasValue)
                 {
-                    case 0:
-                        db.m_Damping = value;
-                        break;
-                    case 1:
-                        db.m_Elasticity = value;
-                        break;
-                    case 2:
-                        db.m_Inert = value;
-                        break;
-                    case 3:
-                        db.m_Radius = value;
-                        break;
-                    case 4:
-                        db.m_Stiffness = value;
-                        break;
+                    baseValues[kind.Value].Reset();
+                    float value = baseValues[kind.Value].value;
+                    switch (kind.Value)
+                    {
+                        case 0:
+                            db.m_Damping = value;
+                            break;
+                        case 1:
+                            db.m_Elasticity = value;
+                            break;
+                        case 2:
+                            db.m_Inert = value;
+                            break;
+                        case 3:
+                            db.m_Radius = value;
+                            break;
+                        case 4:
+                            db.m_Stiffness = value;
+                            break;
+                    }
                 }
-            }
-            else
-            {
-                for (int i = 0; i < baseValues.Length; i++) baseValues[i].Reset();
-                db.m_Damping = baseValues[0];
-                db.m_Elasticity = baseValues[1];
-                db.m_Inert = baseValues[2];
-                db.m_Radius = baseValues[3];
-                db.m_Stiffness = baseValues[4];
-                foreach (var e in baseValues)
+                else
                 {
-                    e.Reset();
+                    for (int i = 0; i < baseValues.Length; i++) baseValues[i].Reset();
+                    db.m_Damping = baseValues[0];
+                    db.m_Elasticity = baseValues[1];
+                    db.m_Inert = baseValues[2];
+                    db.m_Radius = baseValues[3];
+                    db.m_Stiffness = baseValues[4];
+                    foreach (var e in baseValues)
+                    {
+                        e.Reset();
+                    }
                 }
+                db.UpdateParticles();
             }
-            db.UpdateParticles();
+            UpdateActiveStack();
         }
 
         public void ApplyGravity()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-            db.m_Gravity = gravity;
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_Gravity = gravity;
+            }
+            UpdateActiveStack();
         }
         public void ResetGravity()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
             gravity.Reset();
-            db.m_Gravity = gravity;
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_Gravity = gravity;
+            }
+            UpdateActiveStack();
         }
         public void ApplyForce()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-            db.m_Force = force;
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_Force = force;
+            }
+            UpdateActiveStack();
         }
         public void ResetForce()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
             force.Reset();
-            db.m_Force = force;
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_Force = force;
+            }
+            UpdateActiveStack();
         }
         public void ApplyFreezeAxis()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-            db.m_FreezeAxis = freezeAxis;
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_FreezeAxis = freezeAxis;
+            }
+            UpdateActiveStack();
         }
         public void ResetFreezeAxis()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
             freezeAxis.Reset();
-            db.m_FreezeAxis = freezeAxis;
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_FreezeAxis = freezeAxis;
+            }
+            UpdateActiveStack();
         }
 
         public void ApplyEndOffset()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
-            db.m_EndOffset = endOffset;
-            db.UpdateParticles();
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_EndOffset = endOffset;
+                db.UpdateParticles();
+            }
+            UpdateActiveStack();
         }
         public void ResetEndOffset()
         {
-            DynamicBone db = DynamicBone;
-            if (db == null) return;
             endOffset.Reset();
-            db.m_EndOffset = endOffset;
-            db.UpdateParticles();
+            for (int i = 0; i < DynamicBones.Count; i++)
+            {
+                DynamicBone db = DynamicBones[i];
+                db.m_EndOffset = endOffset;
+                db.UpdateParticles();
+            }
+            UpdateActiveStack();
         }
     }
 }
