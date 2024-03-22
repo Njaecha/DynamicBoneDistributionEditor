@@ -159,11 +159,11 @@ namespace DynamicBoneDistributionEditor
                 //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Distribution");
                 if (!edits[0].IsNullOrEmpty())
                 {
-				    var distribs = MessagePackSerializer.Deserialize<Dictionary<byte, Keyframe[]>>(edits[0]);
+				    var distribs = MessagePackSerializer.Deserialize<Dictionary<byte, SerialisableKeyframe[]>>(edits[0]);
 				    foreach (byte i in distribs.Keys)
 				    {
-                        if (DBDE.loadSettingsAsDefault.Value) distributions[i] = (EditableValue<Keyframe[]>)distribs[i];
-                        else distributions[i].value = distribs[i];
+                        if (DBDE.loadSettingsAsDefault.Value) distributions[i] = (EditableValue<Keyframe[]>)distribs[i].Select(keyframe => (Keyframe)keyframe).ToArray();
+                        else distributions[i].value = distribs[i].Select(keyframe => (Keyframe)keyframe).ToArray();
 				    }
                 }
                 //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Gravity");
@@ -275,9 +275,9 @@ namespace DynamicBoneDistributionEditor
 
 		public byte[] Sersialise()
 		{
-            Dictionary<byte, Keyframe[]> distribs = distributions
+            Dictionary<byte, SerialisableKeyframe[]> distribs = distributions
 				.Where(t => t.IsEdited)
-				.Select((t, i) => new KeyValuePair<byte, Keyframe[]>((byte)i, t))
+				.Select((t, i) => new KeyValuePair<byte, SerialisableKeyframe[]>((byte)i, ((Keyframe[])t).Select(keyframe => (SerialisableKeyframe)keyframe).ToArray()))
 				.ToDictionary(x => x.Key, x => x.Value);
             byte[] sDistrib = MessagePackSerializer.Serialize(distribs);
 			Dictionary<byte, float> bValues = baseValues
