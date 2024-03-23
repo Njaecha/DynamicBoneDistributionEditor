@@ -140,7 +140,7 @@ namespace DynamicBoneDistributionEditor
 
         private void createSideBarToggle(object sender, RegisterCustomControlsEvent e)
         {
-            toggle = e.AddSidebarControl(new SidebarToggle("DynamicBone Distribution Edit", false, this));
+            toggle = e.AddSidebarControl(new SidebarToggle("DBDE", false, this));
             toggle.ValueChanged.Subscribe(toggleEvent);
         }
 

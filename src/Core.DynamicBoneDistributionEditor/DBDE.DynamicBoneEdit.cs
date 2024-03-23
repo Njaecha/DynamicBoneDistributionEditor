@@ -276,14 +276,14 @@ namespace DynamicBoneDistributionEditor
 		public byte[] Sersialise()
 		{
             Dictionary<byte, SerialisableKeyframe[]> distribs = distributions
-				.Where(t => t.IsEdited)
-				.Select((t, i) => new KeyValuePair<byte, SerialisableKeyframe[]>((byte)i, ((Keyframe[])t).Select(keyframe => (SerialisableKeyframe)keyframe).ToArray()))
-				.ToDictionary(x => x.Key, x => x.Value);
+				.Select((t, i) => new KeyValuePair<byte, EditableValue<Keyframe[]>>((byte)i, t))
+				.Where(kvp => kvp.Value.IsEdited)
+				.ToDictionary(x => x.Key, x => ((Keyframe[])x.Value).Select(keyframe => (SerialisableKeyframe)keyframe).ToArray());
             byte[] sDistrib = MessagePackSerializer.Serialize(distribs);
 			Dictionary<byte, float> bValues = baseValues
-				.Where(v => v.IsEdited)
-				.Select((v, i) => new KeyValuePair<byte, float>((byte)i, v))
-				.ToDictionary(x => x.Key, x => x.Value);
+				.Select((v, i) => new KeyValuePair<byte, EditableValue<float>>((byte)i, v))
+				.Where(kvp => kvp.Value.IsEdited)
+				.ToDictionary(x => x.Key, x => (float)x.Value);
             byte[] sBaseValues = MessagePackSerializer.Serialize(bValues);
 
             byte[] sGravtiy = SerialiseEditableVector(gravity);
