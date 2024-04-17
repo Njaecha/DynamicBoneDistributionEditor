@@ -347,10 +347,12 @@ namespace DynamicBoneDistributionEditor
             #region Right Side - Header
             GUILayout.BeginHorizontal(); // header
             GUILayout.Label(new GUIContent(Editing.GetButtonName()), HeadStyle);
+            if (Editing.isActiveEdited()) GUI.color = Color.magenta;
             if (GUILayout.Button(new GUIContent(Editing.active ? "ON" : "OFF", "Toggle DynamicBone"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
             {
                 Editing.active = !Editing.active;
             }
+            GUI.color = guic;
             GUILayout.EndHorizontal();
             #endregion
 

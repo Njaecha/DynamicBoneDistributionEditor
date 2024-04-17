@@ -80,8 +80,8 @@ namespace DynamicBoneDistributionEditor
                         normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.Sersialise()));
                     }
                 }
-                data.data.Add($"AccessoryEdits{key}", MessagePackSerializer.Serialize(accessoryEdits));
-                data.data.Add($"NormalEdits{key}", MessagePackSerializer.Serialize(normalEdits));
+                if (!accessoryEdits.IsNullOrEmpty()) data.data.Add($"AccessoryEdits{key}", MessagePackSerializer.Serialize(accessoryEdits));
+                if (!normalEdits.IsNullOrEmpty()) data.data.Add($"NormalEdits{key}", MessagePackSerializer.Serialize(normalEdits));
             }
             SetExtendedData(data);
         }
@@ -277,10 +277,11 @@ namespace DynamicBoneDistributionEditor
         private IEnumerator LoadData(int outfit, List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits, List<KeyValuePair<string, byte[]>> normalEdits, List<DynamicBoneData> DBE_Data, bool cMode = false)
         {
             // wait until the user switches to this coordinate
-            // else I cant create DBDEDynamicBoneEdit because I need to have the dynamic bones to do so, but they only exist after oufit is active
+            // else we cant create DBDEDynamicBoneEdit because we need to have the dynamic bones to do so, but they only exist after oufit is active
             while (ChaControl.fileStatus.coordinateType != outfit)
                 yield return null; 
             
+            yield return null;
             yield return null;
             yield return null;
 

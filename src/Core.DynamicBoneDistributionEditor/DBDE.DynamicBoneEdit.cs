@@ -28,6 +28,7 @@ namespace DynamicBoneDistributionEditor
         public EditableValue<Vector3> endOffset;
         public EditableValue<DynamicBone.FreezeAxis> freezeAxis;
 
+        private bool initalActive;
         private bool _active;
         public bool active {get => _active; set => SetActive(value); }
 
@@ -93,7 +94,7 @@ namespace DynamicBoneDistributionEditor
                 return;
             }
 
-            _active = db.enabled;
+            initalActive = _active = db.enabled;
             this.distributions = new EditableValue<Keyframe[]>[]
             {
                 new EditableValue<Keyframe[]>(db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
@@ -116,6 +117,7 @@ namespace DynamicBoneDistributionEditor
             endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
 
+
             PasteData(copyFrom);
         }
 
@@ -129,7 +131,7 @@ namespace DynamicBoneDistributionEditor
                 return;
             }
 
-            _active = db.enabled;
+            initalActive = _active = db.enabled;
 			this.distributions = new EditableValue<Keyframe[]>[]
 			{
 				new EditableValue<Keyframe[]>(db.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
@@ -378,6 +380,11 @@ namespace DynamicBoneDistributionEditor
             return false;
         }
 
+        public bool isActiveEdited()
+        {
+            return initalActive != active;
+        }
+
 		public bool IsEdited()
 		{
 			foreach (var d in distributions)
@@ -392,6 +399,7 @@ namespace DynamicBoneDistributionEditor
             if (force.IsEdited) return true;
             if (endOffset.IsEdited) return true;
             if (freezeAxis.IsEdited) return true;
+            if (initalActive != active) return true;
 			return false;
 		}
 
@@ -432,6 +440,7 @@ namespace DynamicBoneDistributionEditor
             ResetForce();
             ResetEndOffset();
             ResetFreezeAxis();
+            SetActive(initalActive);
         }
 
 		public void ApplyDistribution(int? kind = null)
