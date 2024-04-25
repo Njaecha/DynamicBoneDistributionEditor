@@ -21,6 +21,7 @@ using ADV.Commands.Effect;
 using KKAPI.Studio;
 using Screencap;
 using BepInEx.Bootstrap;
+using ExtensibleSaveFormat;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -31,7 +32,7 @@ namespace DynamicBoneDistributionEditor
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "1.2.4";
+        public const string Version = "1.3.0";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
@@ -64,7 +65,6 @@ namespace DynamicBoneDistributionEditor
             drawGizmos = Config.Bind("", "Draw Gizmos", true, "Toggle gizmos. Can also be toggled in the UI");
 
             Instance = this;
-            
         }
 
         private void ScreenshotManager_OnPostCapture()

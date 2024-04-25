@@ -161,7 +161,7 @@ namespace DynamicBoneDistributionEditor
                 //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Distribution");
                 if (!edits[0].IsNullOrEmpty())
                 {
-				    var distribs = MessagePackSerializer.Deserialize<Dictionary<byte, SerialisableKeyframe[]>>(edits[0]);
+                    Dictionary<byte, SerialisableKeyframe[]> distribs = MessagePackSerializer.Deserialize<Dictionary<byte, SerialisableKeyframe[]>>(edits[0]);
 				    foreach (byte i in distribs.Keys)
 				    {
                         if (DBDE.loadSettingsAsDefault.Value) distributions[i] = (EditableValue<Keyframe[]>)distribs[i].Select(keyframe => (Keyframe)keyframe).ToArray();
@@ -275,6 +275,56 @@ namespace DynamicBoneDistributionEditor
 			distributions[kind].value = animationCurve.keys;
 		}
 
+        // currently not used....
+        internal static byte[] SerialseFromDBE(DynamicBoneData DBE, byte[] serialsedDBDEData = null)
+        {
+
+            byte[] Distributions = MessagePackSerializer.Serialize(new Dictionary<byte, SerialisableKeyframe[]>());
+
+            Dictionary<byte, float> DBDEBaseValues = new Dictionary<byte, float>();
+
+            byte[] Gravity = null;
+            byte[] Force = null;
+            byte[] EndOffset = null;
+
+            byte[] DBDEFreezeAxis = null;
+
+            if (serialsedDBDEData != null) // load DBDE Data
+            {
+                List<byte[]> e = MessagePackSerializer.Deserialize<List<byte[]>>(serialsedDBDEData);
+                if (!e[0].IsNullOrEmpty() && MessagePackSerializer.Deserialize<Dictionary<byte, SerialisableKeyframe[]>>(e[0]).Count > 0) Distributions = e[0];
+                if (!e[1].IsNullOrEmpty()) DBDEBaseValues = MessagePackSerializer.Deserialize<Dictionary<byte, float>>(e[1]); // baseValues
+                if (!e[2].IsNullOrEmpty()) Gravity = e[2]; // gravity
+                if (!e[3].IsNullOrEmpty()) Force = e[3]; // force
+                if (!e[4].IsNullOrEmpty()) EndOffset = e[4]; // endOffset
+                if (!e[5].IsNullOrEmpty()) DBDEFreezeAxis = e[5]; // freezeAxis
+            }
+
+            Dictionary<byte, float> bValues = new Dictionary<byte, float>();
+            if (DBDEBaseValues.ContainsKey(0)) bValues.Add(0, DBDEBaseValues[0]);
+            else if (DBE.Damping.HasValue) bValues.Add(0, DBE.Damping.Value);
+            if (DBDEBaseValues.ContainsKey(1)) bValues.Add(1, DBDEBaseValues[1]);
+            else if (DBE.Elasticity.HasValue) bValues.Add(1, DBE.Elasticity.Value);
+            if (DBDEBaseValues.ContainsKey(2)) bValues.Add(2, DBDEBaseValues[2]);
+            else if (DBE.Inertia.HasValue) bValues.Add(2, DBE.Inertia.Value);
+            if (DBDEBaseValues.ContainsKey(3)) bValues.Add(3, DBDEBaseValues[3]);
+            else if (DBE.Radius.HasValue) bValues.Add(3, DBE.Radius.Value);
+            if (DBDEBaseValues.ContainsKey(4)) bValues.Add(4, DBDEBaseValues[4]);
+            else if (DBE.Stiffness.HasValue) bValues.Add(4, DBE.Stiffness.Value);
+
+            List<byte[]> edits = new List<byte[]>() {
+                Distributions, 
+                MessagePackSerializer.Serialize(bValues), // baseValues
+                Gravity, 
+                Force, 
+                EndOffset, 
+                DBDEFreezeAxis != null ? DBDEFreezeAxis : DBE.FreezeAxis.HasValue ? MessagePackSerializer.Serialize((byte)DBE.FreezeAxis) : null, // freezeAxis as byte or null
+                MessagePackSerializer.Serialize(true) // always assumet the bone is enabled because DBE cannot disable it
+            };
+
+            return MessagePackSerializer.Serialize(edits);
+        }
+
 		public byte[] Sersialise()
 		{
             Dictionary<byte, SerialisableKeyframe[]> distribs = distributions
@@ -302,7 +352,7 @@ namespace DynamicBoneDistributionEditor
             return MessagePackSerializer.Serialize(edits);
 		}
 
-        private byte[] SerialiseEditableVector(EditableValue<Vector3> editableValue)
+        private static byte[] SerialiseEditableVector(EditableValue<Vector3> editableValue)
         {
             byte[] binary = null;
             if (editableValue.IsEdited)

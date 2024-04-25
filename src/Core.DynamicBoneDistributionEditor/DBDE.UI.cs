@@ -65,6 +65,7 @@ namespace DynamicBoneDistributionEditor
         private string filterText = string.Empty;
 
         public string TitleAppendix = "";
+        public DBDECharaController referencedChara = null;
 
         public bool UpdateUIWhileOpen = true;
 
@@ -123,7 +124,8 @@ namespace DynamicBoneDistributionEditor
             RefreshBoneList = null;
             currentIndex = 0;
             currentEdit = null;
-            if (KKAPI.Maker.MakerAPI.InsideAndLoaded) DBDE.toggle.Value = false;
+            referencedChara = null;
+            if (KKAPI.Maker.MakerAPI.InsideAndLoaded) DBDE.toggle.SetValue(false);
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
             ace?.close();
             DBDEGizmoController gizmo = Camera.main.GetOrAddComponent<DBDEGizmoController>();
@@ -142,6 +144,8 @@ namespace DynamicBoneDistributionEditor
             return true;
         }
 
+        int BeenHiddenForFrames = 0;
+
         private void OnGUI()
         {
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
@@ -154,14 +158,30 @@ namespace DynamicBoneDistributionEditor
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
             if (DBDEGetter != null)
             {
+                bool draw = true;
                 List<DBDEDynamicBoneEdit> DBDES = new List<DBDEDynamicBoneEdit>();
                 // try if DBDES can be obtained and the dynamic bones are still valid, else close UI
                 // if we dont do this and the UI stays open in studio while the character its editing is deleted it goes nuts
-                try { DBDES = DBDEGetter.Invoke(); DBDES.ForEach(d => d.GetButtonName()); } catch (Exception) { Close(); }
-                if (!(DBDES.IsNullOrEmpty() || DBDES.Count <= currentIndex)) windowRect = GUI.Window(5858350, windowRect, WindowFunction, $"DBDE v{DBDE.Version} - {TitleAppendix}", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                try { DBDES = DBDEGetter.Invoke(); DBDES.ForEach(d => d.GetButtonName()); } catch (Exception) { 
+                    draw = false; 
+                    BeenHiddenForFrames++; 
+                    RefreshBoneList.Invoke();
+                }
+                if (draw && !DBDES.IsNullOrEmpty())
+                {
+                    if (DBDES.Count <= currentIndex) SetCurrentRightSide(DBDES.Count - 1);
+                    BeenHiddenForFrames = 0;
+                    windowRect = GUI.Window(5858350, windowRect, WindowFunction, $"DBDE v{DBDE.Version} - {TitleAppendix}", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                }
             }
             if (currentEdit.HasValue) rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>()?.OnGUI();
-            
+
+            if (BeenHiddenForFrames > 30)
+            {
+                BeenHiddenForFrames = 0;
+                Close();
+            }
+
         }
 
         private Rect lastUsedAceRect = new Rect(Screen.width / 2, Screen.height / 2, 500, 300);
@@ -326,14 +346,16 @@ namespace DynamicBoneDistributionEditor
             DBDEDynamicBoneEdit Editing = DBDES[currentIndex];
             if (Editing != null && Editing.PrimaryDynamicBone != null)
             {
+                // fix gizmo showing the wrong bone in some cases
+                if (!Editing.Equals(Camera.main.GetComponent<DBDEGizmoController>()?.Editing)) SetCurrentRightSide(currentIndex);
 
-
-                if (UpdateUIWhileOpen)
+                if (UpdateUIWhileOpen && (referencedChara == null || !referencedChara.IsLoading))
                 {
                     Editing.ReferToDynamicBone();
                     gravityWrapper.SetForVector(Editing.gravity.value);
                     forceWrapper.SetForVector(Editing.force.value);
                 }
+
 
                 GUILayout.BeginVertical(); // bone settings
                 #region Right Side - Header

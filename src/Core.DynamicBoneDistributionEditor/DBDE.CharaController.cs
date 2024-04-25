@@ -16,6 +16,7 @@ using KKAPI.Studio;
 using UnityEngine.UI;
 using Illusion.Extensions;
 using ADV.Commands.Chara;
+using System.Runtime.CompilerServices;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -30,16 +31,36 @@ namespace DynamicBoneDistributionEditor
         private static PluginData cloTransferPluginData; // for DBDE
         private static PluginData cloTransferPluginDataDBE; // for DBE
 
+        private PluginData DBEData = null;
+
+        private bool _isLoading = false;
+        public bool IsLoading { get => _isLoading; internal set => setIsLoading(value); }
+
+        private void setIsLoading(bool value)
+        {
+            if (value && !_isLoading) StartCoroutine(endLoading());
+            _isLoading = value;
+        }
+
+        private IEnumerator endLoading()
+        {
+            for (int i = 0; i < LoadIgnoreFrameCount; i++)
+            {
+                DBDE.Logger.LogDebug($"DBDE Waiting for load to finish -> Frame {i + 1}/{LoadIgnoreFrameCount}");
+                yield return null;
+            }
+            IsLoading = false;
+        }
+
         protected override void OnReload(GameMode currentGameMode, bool maintainState)
         {
-            RefreshOverride = true;
-            StartCoroutine(RemoveRefreshOverride(5));
+            IsLoading = true;
 
             DistributionEdits.Clear();
             DistributionEditsNotLoaded.Clear();
 
             PluginData data = GetExtendedData();
-            PluginData DBE_data = Chainloader.PluginInfos.ContainsKey("com.deathweasel.bepinex.dynamicboneeditor") ? null : ExtendedSave.GetExtendedDataById(MakerAPI.LastLoadedChaFile ?? ChaFileControl, "com.deathweasel.bepinex.dynamicboneeditor");
+            PluginData DBE_data = DBEData = Chainloader.PluginInfos.ContainsKey("com.deathweasel.bepinex.dynamicboneeditor") ? null : ExtendedSave.GetExtendedDataById(MakerAPI.LastLoadedChaFile ?? ChaFileControl, "com.deathweasel.bepinex.dynamicboneeditor");
             if (data == null && DBE_data == null) return;
             for (int cSet = 0; cSet < ChaControl.chaFile.coordinate.Length; cSet++)
             {
@@ -63,12 +84,17 @@ namespace DynamicBoneDistributionEditor
                 DistributionEditsNotLoaded.Add(cSet, new List<object> { accessoryEdits, normalEdits, DBEEdits });
             }
             base.OnReload(currentGameMode, maintainState);
+
         }
 
         protected override void OnCardBeingSaved(GameMode currentGameMode)
         {
             PluginData data = new PluginData();
             RefreshBoneList();
+
+            Dictionary<int, List<KeyValuePair<KeyValuePair<int, string>, byte[]>>> ACC = new Dictionary<int, List<KeyValuePair<KeyValuePair<int, string>, byte[]>>>();
+            Dictionary<int, List<KeyValuePair<string, byte[]>>> NORM = new Dictionary<int, List<KeyValuePair<string, byte[]>>>();
+
             // serialise edits list for current coordinate
             foreach (int key in DistributionEdits.Keys)
             {
@@ -86,8 +112,39 @@ namespace DynamicBoneDistributionEditor
                         normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.Sersialise()));
                     }
                 }
-                if (!accessoryEdits.IsNullOrEmpty()) data.data.Add($"AccessoryEdits{key}", MessagePackSerializer.Serialize(accessoryEdits));
-                if (!normalEdits.IsNullOrEmpty()) data.data.Add($"NormalEdits{key}", MessagePackSerializer.Serialize(normalEdits));
+                if (!accessoryEdits.IsNullOrEmpty()) ACC[key] = accessoryEdits;
+                if (!normalEdits.IsNullOrEmpty()) NORM[key] = normalEdits;
+                
+            }
+            // also take in account data in DistributionEditsNotLoaded
+            bool resaveDBEData = false;
+            foreach (int key in DistributionEditsNotLoaded.Keys)
+            {
+                List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits = DistributionEditsNotLoaded[key][0] as List<KeyValuePair<KeyValuePair<int, string>, byte[]>>;
+                List<KeyValuePair<string, byte[]>> normalEdits = DistributionEditsNotLoaded[key][1] as List<KeyValuePair<string, byte[]>>;
+                if (DistributionEditsNotLoaded[key][2] is List<DynamicBoneData>) // have to resave DBE Data so that it doesnt get lost
+                {
+                    resaveDBEData = true;
+                }
+
+                if (!accessoryEdits.IsNullOrEmpty())
+                {
+                    if (ACC.ContainsKey(key)) ACC[key].AddRange(accessoryEdits);
+                    else ACC[key] = accessoryEdits;
+                }
+                if (!normalEdits.IsNullOrEmpty())
+                {
+                    if(NORM.ContainsKey(key)) NORM[key].AddRange(normalEdits);
+                    else NORM[key] = normalEdits;
+                }
+            }
+            
+            foreach (int key in ACC.Keys) data.data.Add($"AccessoryEdits{key}", MessagePackSerializer.Serialize(ACC[key]));
+            foreach (int key in NORM.Keys) data.data.Add($"NormalEdits{key}", MessagePackSerializer.Serialize(NORM[key]));
+
+            if (resaveDBEData && DBEData != null)
+            {
+                ExtendedSave.SetExtendedDataById(ChaFileControl, "com.deathweasel.bepinex.dynamicboneeditor", DBEData);
             }
             SetExtendedData(data);
         }
@@ -169,9 +226,7 @@ namespace DynamicBoneDistributionEditor
 
         protected override void OnCoordinateBeingLoaded(ChaFileCoordinate coordinate)
         {
-            RefreshOverride = true;
-            StartCoroutine(RemoveRefreshOverride(5));
-
+            IsLoading = true;
             checkCoordinateLoadOption(out bool loadAccessories, out bool cMode, out List<int> cloImportAccessories);
 
             // Maker partial coordinate load fix
@@ -234,7 +289,6 @@ namespace DynamicBoneDistributionEditor
             if (data != null && data.data.TryGetValue("NormalEdits", out var binaries2) && binaries2 != null)
             {
                 normalEdits = MessagePackSerializer.Deserialize<List<KeyValuePair<string, byte[]>>>((byte[])binaries2);
-                foreach (var s in normalEdits) DBDE.Logger.LogDebug($"Normal Edit -> {s.Key}");
             }
             List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits = null;
             if (loadAccessories && data != null && data.data.TryGetValue("AccessoryEdits", out var binaries) && binaries != null)
@@ -244,7 +298,6 @@ namespace DynamicBoneDistributionEditor
                 {
                     accessoryEdits = accessoryEdits.Where(x => cloImportAccessories.Contains(x.Key.Key)).ToList(); // keep only edits of which the accessory slot is being loaded
                 }
-                foreach (var s in accessoryEdits) DBDE.Logger.LogDebug($"Accessory Edit -> {s.Key}");
             }
             List<DynamicBoneData> DBEEdits = new List<DynamicBoneData>();
             if (loadAccessories && DBE_data != null && DBE_data.data.TryGetValue("AccessoryDynamicBoneData", out var binaries3) && binaries3 != null)
@@ -255,10 +308,8 @@ namespace DynamicBoneDistributionEditor
                 {
                     DBEEdits = DBEEdits.Where(x => cloImportAccessories.Contains(x.Slot)).ToList(); // keep only edits of which the accessory slot is being loaded
                 }
-                foreach (var s in DBEEdits) DBDE.Logger.LogDebug($"DBE Edit -> cSet = {s.CoordinateIndex} | {s.Slot} | {s.BoneName}");
             }
             DBDE.UI.Close();
-            RefreshOverride = true;
             StartCoroutine(LoadData(ChaControl.fileStatus.coordinateType, accessoryEdits, normalEdits, DBEEdits, true));
             base.OnCoordinateBeingLoaded(coordinate);
         }
@@ -303,7 +354,6 @@ namespace DynamicBoneDistributionEditor
                 if (DistributionEditsNotLoaded[cSet][0] is List<KeyValuePair<KeyValuePair<int, string>, byte[]>> a) accessoryEdits = a;
                 if (DistributionEditsNotLoaded[cSet][1] is List<KeyValuePair<string, byte[]>> b) normalEdits = b;
                 if (DistributionEditsNotLoaded[cSet][2] is List<DynamicBoneData> c) DBEEdits = c;
-                RefreshOverride = true;
                 StartCoroutine(LoadData(cSet, accessoryEdits, normalEdits, DBEEdits));
                 DistributionEditsNotLoaded.Remove(cSet);
             }
@@ -321,6 +371,7 @@ namespace DynamicBoneDistributionEditor
 
         internal void ClothesChanged()
         {
+            if (IsLoading) return;
             DynamicBoneCache.Clear();
             if (DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType))
             {
@@ -329,7 +380,6 @@ namespace DynamicBoneDistributionEditor
                     edit.UpdateActiveStack(true);
                 }
             }
-            DBDE.Logger.LogDebug("ClothesEvent");
             RefreshBoneList();
         }
 
@@ -342,24 +392,29 @@ namespace DynamicBoneDistributionEditor
 
         private IEnumerator ApplyCurrentDelayed()
         {
-            yield return null;
-            yield return null;
-            yield return null; // for good measure
+            while (IsLoading) yield return null;
+
             if (KKAPI.Studio.StudioAPI.InsideStudio)
             {
                 yield return null;
                 yield return null;
             }
-            DBDE.Logger.LogDebug("ApplyDelayed");
+            DBDE.Logger.LogDebug($"Applying Data for outfit {ChaControl.fileStatus.coordinateType} on character {ChaControl.chaFile.GetFancyCharacterName()} (from Delayed)");
             RefreshBoneList();
-            DistributionEdits[ChaControl.fileStatus.coordinateType].ForEach(d => d.ApplyAll());
+            for (int i = 0; i < DistributionEdits[ChaControl.fileStatus.coordinateType].Count; i++)
+            {
+                DistributionEdits[ChaControl.fileStatus.coordinateType][i].ApplyAll();
+            }
             DBDE.UI.UpdateUIWhileOpen = true;
         }
 
+        
+
+        public int LoadIgnoreFrameCount = 3;
+
         private IEnumerator LoadData(int outfit, List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits, List<KeyValuePair<string, byte[]>> normalEdits, List<DynamicBoneData> DBE_Data, bool outfitLoad = false)
         {
-            yield return null;
-            yield return null; // wait two more frames so that other plugins can do their stuff
+            while (IsLoading) yield return null;
 
             if (KKAPI.Studio.StudioAPI.InsideStudio)
             {
@@ -372,7 +427,7 @@ namespace DynamicBoneDistributionEditor
 
             if (!DistributionEdits.ContainsKey(outfit)) DistributionEdits.Add(outfit, new List<DBDEDynamicBoneEdit>());
 
-            if (!accessoryEdits.IsNullOrEmpty() || DBE_Data != null)
+            if (!accessoryEdits.IsNullOrEmpty() || !DBE_Data.IsNullOrEmpty())
             {
                 if (!accessoryEdits.IsNullOrEmpty())
                 {
@@ -434,7 +489,6 @@ namespace DynamicBoneDistributionEditor
             {
                 DistributionEdits[outfit][i].ApplyAll();
             }
-            RefreshOverride = false;
         }
 
         internal void AccessoryChangedEvent(int slot)
@@ -447,7 +501,6 @@ namespace DynamicBoneDistributionEditor
                     edit.UpdateActiveStack(true);
                 }
             }
-            DBDE.Logger.LogDebug("AccessoryEvent");
             RefreshBoneList();
         }
 
@@ -510,6 +563,7 @@ namespace DynamicBoneDistributionEditor
             RefreshBoneList();
             DBDE.UI.Open(() => DistributionEdits[ChaControl.fileStatus.coordinateType], () => RefreshBoneList());
             DBDE.UI.TitleAppendix = ChaControl.chaFile.GetFancyCharacterName();
+            DBDE.UI.referencedChara = this;
         }
 
         public IEnumerator RefreshBoneListDelayed()
@@ -518,21 +572,9 @@ namespace DynamicBoneDistributionEditor
             RefreshBoneList();
         }
 
-        
-        internal IEnumerator RemoveRefreshOverride(int frames)
-        {
-            for (int i = 0; i < frames; i++) yield return null; // wait five frames
-            DBDE.Logger.LogDebug("Removing RefreshOverride");
-            RefreshOverride = false;
-        }
-
-        private bool RefreshOverride = false;
-
         private void RefreshBoneList(bool removeDeadOnes = true)
         {
-            if (RefreshOverride) return;
-            //RefreshOverride = true;
-            //StartCoroutine(RemoveRefreshOverride(1));
+            if (IsLoading) return;
 
             int outfit = ChaControl.fileStatus.coordinateType;
 
@@ -620,13 +662,17 @@ namespace DynamicBoneDistributionEditor
 
             // == remove DBDEDynamicBoneEdits whose dynamic bones could not be found anymore.
             if (removeDeadOnes) DistributionEdits[outfit].RemoveAll(a => {
-                if (a.DynamicBones.IsNullOrEmpty())
+                if (a.DynamicBones.IsNullOrEmpty() || a.DynamicBones.All(d => d == null))
                 {
                     string print = "";
                     if (a.ReidentificationData is KeyValuePair<int, string> acc) print = $"{acc.Key} -> {acc.Value}";
                     else if (a.ReidentificationData is string nor) print = nor;
-                    DBDE.Logger.LogInfo($"Outfit{outfit} - Removed: {print}");
+                    DBDE.Logger.LogDebug($"Outfit{outfit} - Removed: {print}");
                     return true;
+                }
+                else
+                {
+                    if (a.DynamicBones.Any(d => d == null)) DynamicBoneCache.Clear(); // dead bone stuck in cache
                 }
                 return false;
             });
