@@ -36,6 +36,8 @@ namespace DynamicBoneDistributionEditor
             StartCoroutine(RemoveRefreshOverride(5));
 
             DistributionEdits.Clear();
+            DistributionEditsNotLoaded.Clear();
+
             PluginData data = GetExtendedData();
             PluginData DBE_data = Chainloader.PluginInfos.ContainsKey("com.deathweasel.bepinex.dynamicboneeditor") ? null : ExtendedSave.GetExtendedDataById(MakerAPI.LastLoadedChaFile ?? ChaFileControl, "com.deathweasel.bepinex.dynamicboneeditor");
             if (data == null && DBE_data == null) return;
@@ -623,7 +625,7 @@ namespace DynamicBoneDistributionEditor
                     string print = "";
                     if (a.ReidentificationData is KeyValuePair<int, string> acc) print = $"{acc.Key} -> {acc.Value}";
                     else if (a.ReidentificationData is string nor) print = nor;
-                    DBDE.Logger.LogInfo($"Removed: {print}");
+                    DBDE.Logger.LogInfo($"Outfit{outfit} - Removed: {print}");
                     return true;
                 }
                 return false;

@@ -515,7 +515,7 @@ namespace DynamicBoneDistributionEditor
 
                 #region Right Side - Footer
                 GUILayout.BeginHorizontal(); // bone level buttons
-                if (Clipboard != null && Clipboard.boneIndex != currentIndex && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
+                if (Clipboard != null && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
                 {
                     if (GUILayout.Button("Paste All"))
                     {
