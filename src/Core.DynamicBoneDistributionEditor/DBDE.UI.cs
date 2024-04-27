@@ -65,6 +65,7 @@ namespace DynamicBoneDistributionEditor
         private string filterText = string.Empty;
 
         public string TitleAppendix = "";
+        public DBDECharaController referencedChara = null;
 
         public bool UpdateUIWhileOpen = true;
 
@@ -123,7 +124,8 @@ namespace DynamicBoneDistributionEditor
             RefreshBoneList = null;
             currentIndex = 0;
             currentEdit = null;
-            if (KKAPI.Maker.MakerAPI.InsideAndLoaded) DBDE.toggle.Value = false;
+            referencedChara = null;
+            if (KKAPI.Maker.MakerAPI.InsideAndLoaded) DBDE.toggle.SetValue(false);
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
             ace?.close();
             DBDEGizmoController gizmo = Camera.main.GetOrAddComponent<DBDEGizmoController>();
@@ -142,6 +144,8 @@ namespace DynamicBoneDistributionEditor
             return true;
         }
 
+        int BeenHiddenForFrames = 0;
+
         private void OnGUI()
         {
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
@@ -154,14 +158,30 @@ namespace DynamicBoneDistributionEditor
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
             if (DBDEGetter != null)
             {
+                bool draw = true;
                 List<DBDEDynamicBoneEdit> DBDES = new List<DBDEDynamicBoneEdit>();
                 // try if DBDES can be obtained and the dynamic bones are still valid, else close UI
                 // if we dont do this and the UI stays open in studio while the character its editing is deleted it goes nuts
-                try { DBDES = DBDEGetter.Invoke(); DBDES.ForEach(d => d.GetButtonName()); } catch (Exception) { Close(); }
-                if (!(DBDES.IsNullOrEmpty() || DBDES.Count <= currentIndex)) windowRect = GUI.Window(5858350, windowRect, WindowFunction, $"DBDE v{DBDE.Version} - {TitleAppendix}", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                try { DBDES = DBDEGetter.Invoke(); DBDES.ForEach(d => d.GetButtonName()); } catch (Exception) { 
+                    draw = false; 
+                    BeenHiddenForFrames++; 
+                    RefreshBoneList.Invoke();
+                }
+                if (draw && !DBDES.IsNullOrEmpty())
+                {
+                    if (DBDES.Count <= currentIndex) SetCurrentRightSide(DBDES.Count - 1);
+                    BeenHiddenForFrames = 0;
+                    windowRect = GUI.Window(5858350, windowRect, WindowFunction, $"DBDE v{DBDE.Version} - {TitleAppendix}", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
+                }
             }
             if (currentEdit.HasValue) rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>()?.OnGUI();
-            
+
+            if (BeenHiddenForFrames > 30)
+            {
+                BeenHiddenForFrames = 0;
+                Close();
+            }
+
         }
 
         private Rect lastUsedAceRect = new Rect(Screen.width / 2, Screen.height / 2, 500, 300);
@@ -261,8 +281,8 @@ namespace DynamicBoneDistributionEditor
             List<DBDEDynamicBoneEdit> DBDES = DBDEGetter.Invoke();
             if (DBDES.IsNullOrEmpty())
             {
-                RefreshBoneList.Invoke();
-                close();
+                //RefreshBoneList.Invoke();
+                //close();
                 return;
             }
 
@@ -320,239 +340,235 @@ namespace DynamicBoneDistributionEditor
             GUILayout.EndVertical();
             #endregion
             GUILayout.Space(3);
+
             #region Right Side
 
             DBDEDynamicBoneEdit Editing = DBDES[currentIndex];
-            if (Editing == null)
+            if (Editing != null && Editing.PrimaryDynamicBone != null)
             {
-                RefreshBoneList.Invoke();
-                close();
-                return;
-            }
-            if (Editing.PrimaryDynamicBone == null)
-            {
-                RefreshBoneList.Invoke();
-                close();
-                return;
-            }
+                // fix gizmo showing the wrong bone in some cases
+                if (!Editing.Equals(Camera.main.GetComponent<DBDEGizmoController>()?.Editing)) SetCurrentRightSide(currentIndex);
 
-            if (UpdateUIWhileOpen)
-            {
-                Editing.ReferToDynamicBone();
-                gravityWrapper.SetForVector(Editing.gravity.value);
-                forceWrapper.SetForVector(Editing.force.value);
-            }
-
-            GUILayout.BeginVertical(); // bone settings
-            #region Right Side - Header
-            GUILayout.BeginHorizontal(); // header
-            GUILayout.Label(new GUIContent(Editing.GetButtonName()), HeadStyle);
-            if (Editing.isActiveEdited()) GUI.color = Color.magenta;
-            if (GUILayout.Button(new GUIContent(Editing.active ? "ON" : "OFF", "Toggle DynamicBone"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
-            {
-                Editing.active = !Editing.active;
-            }
-            GUI.color = guic;
-            GUILayout.EndHorizontal();
-            #endregion
-
-            RightSideScroll = GUILayout.BeginScrollView(RightSideScroll);
-            #region Right Side - Freeze Axis
-            GUILayout.BeginHorizontal();
-            if (Editing.freezeAxis.IsEdited) GUI.color = Color.magenta;
-            GUILayout.Label("Freeze Axis" + (Editing.freezeAxis.IsEdited ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6));
-            GUI.color = guic;
-            int freeze = (int)Editing.freezeAxis.value;
-            Editing.freezeAxis.value = (DynamicBone.FreezeAxis)GUILayout.Toolbar((int)Editing.freezeAxis.value, axisNames);
-            if (freeze != (int)Editing.freezeAxis.value) Editing.ApplyFreezeAxis(); // Apply if freeze Axis was changed
-            
-
-            if (Clipboard != null)
-            {
-                if (Clipboard.data is DynamicBone.FreezeAxis value) // draw paste button
+                if (UpdateUIWhileOpen && (referencedChara == null || !referencedChara.IsLoading))
                 {
-                    if (GUILayout.Button(new GUIContent("Paste", $"Paste Value: {value}"), GUILayout.Width(COPYBUTTONWIDTH)))
-                    {
-                        Editing.freezeAxis.value = value;
-                        Editing.ApplyForce();
-                    }
+                    Editing.ReferToDynamicBone();
+                    gravityWrapper.SetForVector(Editing.gravity.value);
+                    forceWrapper.SetForVector(Editing.force.value);
                 }
-                else DrawDisabledCopyButton();
-            }
-            else // draw copy button
-            {
-                if (GUILayout.Button(new GUIContent("Copy", $"Copy Freeze Axis"), GUILayout.Width(COPYBUTTONWIDTH)))
-                {
-                    Clipboard = new ClipboardEntry(currentIndex, -2, Editing.freezeAxis.value);
-                }
-            }
-            if (Editing.freezeAxis.IsEdited) GUI.color = Color.magenta;
-            else GUI.enabled = false;
-            if (GUILayout.Button(new GUIContent("R", $"Reset FreezeAxis"), GUILayout.Width(25)))
-            {
-                Editing.freezeAxis.Reset();
-                Editing.ApplyFreezeAxis();
-            }
-            GUI.enabled = true; GUI.color = guic;
 
-            GUILayout.EndHorizontal();
-            GUILayout.Space(5);
-            #endregion
-            #region Right Side - BaseValue/Distribution
-            for (int i = 0; i < 5; i++) // for "Damping", "Elasticity", "Interia", "Radius", "Stiffness"
-            {
-                int num = i;
-                GUILayout.BeginHorizontal();
-                GUI.color = currentEdit == num ? Color.cyan : Editing.IsEdited(num) ? Color.magenta : guic;
-                GUILayout.Label(DistribKindNames[i] + (Editing.IsEdited(num) ? "*" : ""), LabelStyle,GUILayout.Width(windowRect.width / 6), GUILayout.Height(50)); // width 1/6
+
+                GUILayout.BeginVertical(); // bone settings
+                #region Right Side - Header
+                GUILayout.BeginHorizontal(); // header
+                GUILayout.Label(new GUIContent(Editing.GetButtonName()), HeadStyle);
+                if (Editing.isActiveEdited()) GUI.color = Color.magenta;
+                if (GUILayout.Button(new GUIContent(Editing.active ? "ON" : "OFF", "Toggle DynamicBone"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
+                {
+                    Editing.active = !Editing.active;
+                }
                 GUI.color = guic;
-                #region BaseValue / Distribution Controls
-                GUILayout.BeginVertical(); // two rows
-                // top
-                GUILayout.BeginHorizontal(GUILayout.Height(25));
-                if (BaseValueWrappers[num].Active) // draw input field
-                {
-                    BaseValueWrappers[num].Text = GUILayout.TextField(BaseValueWrappers[num].Text);
+                GUILayout.EndHorizontal();
+                #endregion
 
-                } else // draw button
-                {
-                    if (GUILayout.Button(new GUIContent("Value: "+((float)Editing.baseValues[num]).ToString("0.000"), $"{DistribKindNames[num]} Base Value. Click to edit!")))
-                    {
-                        BaseValueWrappers[num].Activate(Editing.baseValues[num]);
-                    }
-                }
+                RightSideScroll = GUILayout.BeginScrollView(RightSideScroll);
+                #region Right Side - Freeze Axis
+                GUILayout.BeginHorizontal();
+                if (Editing.freezeAxis.IsEdited) GUI.color = Color.magenta;
+                GUILayout.Label("Freeze Axis" + (Editing.freezeAxis.IsEdited ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6));
+                GUI.color = guic;
+                int freeze = (int)Editing.freezeAxis.value;
+                Editing.freezeAxis.value = (DynamicBone.FreezeAxis)GUILayout.Toolbar((int)Editing.freezeAxis.value, axisNames);
+                if (freeze != (int)Editing.freezeAxis.value) Editing.ApplyFreezeAxis(); // Apply if freeze Axis was changed
+
+
                 if (Clipboard != null)
                 {
-                    if (Clipboard.data is float value && Clipboard.distribIndex != -2) // draw paste button
+                    if (Clipboard.data is DynamicBone.FreezeAxis value) // draw paste button
                     {
-                        string tooltipValue = value.ToString("0.000");
-                        if (GUILayout.Button(new GUIContent("Paste", $"Paste Value: {tooltipValue}"), GUILayout.Width(COPYBUTTONWIDTH)))
+                        if (GUILayout.Button(new GUIContent("Paste", $"Paste Value: {value}"), GUILayout.Width(COPYBUTTONWIDTH)))
                         {
-                            Editing.baseValues[num].value = value;
-                            Editing.ApplyBaseValues(num);
-                            if (BaseValueWrappers[num].Active) BaseValueWrappers[num].Value = value;
-                            
+                            Editing.freezeAxis.value = value;
+                            Editing.ApplyForce();
                         }
                     }
                     else DrawDisabledCopyButton();
                 }
-                else // draw enabled copy button
+                else // draw copy button
                 {
-                    if (GUILayout.Button(new GUIContent("Copy", $"Copy {DistribKindNames[num]} Base Value"), GUILayout.Width(COPYBUTTONWIDTH)))
+                    if (GUILayout.Button(new GUIContent("Copy", $"Copy Freeze Axis"), GUILayout.Width(COPYBUTTONWIDTH)))
                     {
-                        Clipboard = new ClipboardEntry(currentIndex, num, Editing.baseValues[num].value);
+                        Clipboard = new ClipboardEntry(currentIndex, -2, Editing.freezeAxis.value);
                     }
                 }
-                if (Editing.baseValues[i].IsEdited) GUI.color = Color.magenta;
+                if (Editing.freezeAxis.IsEdited) GUI.color = Color.magenta;
                 else GUI.enabled = false;
-                if (GUILayout.Button(new GUIContent("R", $"Reset {DistribKindNames[num]} Base Value"), GUILayout.Width(25)))
+                if (GUILayout.Button(new GUIContent("R", $"Reset FreezeAxis"), GUILayout.Width(25)))
                 {
-                    Editing.ResetBaseValues(i);
-                    BaseValueWrappers[i].Value = Editing.baseValues[i].value;
+                    Editing.freezeAxis.Reset();
+                    Editing.ApplyFreezeAxis();
                 }
-                GUI.enabled = true;
-                GUI.color = guic;
+                GUI.enabled = true; GUI.color = guic;
+
                 GUILayout.EndHorizontal();
-                // bottom
-                GUILayout.BeginHorizontal(GUILayout.Height(25));
-                if (BaseValueWrappers[num].Active) // draw slider
+                GUILayout.Space(5);
+                #endregion
+                #region Right Side - BaseValue/Distribution
+                for (int i = 0; i < 5; i++) // for "Damping", "Elasticity", "Interia", "Radius", "Stiffness"
                 {
-                    BaseValueWrappers[num].Value = GUILayout.HorizontalSlider(BaseValueWrappers[num].Value, 0f, 1f);
-                    GUI.color = Color.green;
-                    if (GUILayout.Button(new GUIContent("✓","Accept Value"), GUILayout.Width(25)))
-                    {
-                        BaseValueWrappers[num].Active = false;
-                    }
+                    int num = i;
+                    GUILayout.BeginHorizontal();
+                    GUI.color = currentEdit == num ? Color.cyan : Editing.IsEdited(num) ? Color.magenta : guic;
+                    GUILayout.Label(DistribKindNames[i] + (Editing.IsEdited(num) ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6), GUILayout.Height(50)); // width 1/6
                     GUI.color = guic;
-                }
-                else // draw distribution buttons
-                {
-                    if (GUILayout.Button(new GUIContent("Edit Distribution","Opens Curve Editor for this Distribution Curve")))
+                    #region BaseValue / Distribution Controls
+                    GUILayout.BeginVertical(); // two rows
+                                               // top
+                    GUILayout.BeginHorizontal(GUILayout.Height(25));
+                    if (BaseValueWrappers[num].Active) // draw input field
                     {
-                        GetOrAddACE(Editing.GetAnimationCurve((byte)i), Editing, num);
-                        currentEdit = num;
+                        BaseValueWrappers[num].Text = GUILayout.TextField(BaseValueWrappers[num].Text);
+
+                    }
+                    else // draw button
+                    {
+                        if (GUILayout.Button(new GUIContent("Value: " + ((float)Editing.baseValues[num]).ToString("0.000"), $"{DistribKindNames[num]} Base Value. Click to edit!")))
+                        {
+                            BaseValueWrappers[num].Activate(Editing.baseValues[num]);
+                        }
                     }
                     if (Clipboard != null)
                     {
-                        if (Clipboard.data is AnimationCurve curve) // draw paste button
+                        if (Clipboard.data is float value && Clipboard.distribIndex != -2) // draw paste button
                         {
-                            if (GUILayout.Button(new GUIContent("Paste", "Paste Distribution Curve"), GUILayout.Width(COPYBUTTONWIDTH)))
+                            string tooltipValue = value.ToString("0.000");
+                            if (GUILayout.Button(new GUIContent("Paste", $"Paste Value: {tooltipValue}"), GUILayout.Width(COPYBUTTONWIDTH)))
                             {
-                                Editing.SetAnimationCurve(num, curve);
-                                Editing.ApplyDistribution(num);
-                                
+                                Editing.baseValues[num].value = value;
+                                Editing.ApplyBaseValues(num);
+                                if (BaseValueWrappers[num].Active) BaseValueWrappers[num].Value = value;
+
                             }
                         }
                         else DrawDisabledCopyButton();
                     }
                     else // draw enabled copy button
                     {
-                        if (GUILayout.Button(new GUIContent("Copy",$"Copy {DistribKindNames[num]} Distribution Curve"), GUILayout.Width(COPYBUTTONWIDTH)))
+                        if (GUILayout.Button(new GUIContent("Copy", $"Copy {DistribKindNames[num]} Base Value"), GUILayout.Width(COPYBUTTONWIDTH)))
                         {
-                            Clipboard = new ClipboardEntry(currentIndex, num, Editing.GetAnimationCurve((byte)num));
+                            Clipboard = new ClipboardEntry(currentIndex, num, Editing.baseValues[num].value);
                         }
                     }
-                    if (Editing.distributions[i].IsEdited) GUI.color = Color.magenta;
+                    if (Editing.baseValues[i].IsEdited) GUI.color = Color.magenta;
                     else GUI.enabled = false;
-                    if (GUILayout.Button(new GUIContent("R",$"Reset {DistribKindNames[num]} Distribution Curve"), GUILayout.Width(25)))
+                    if (GUILayout.Button(new GUIContent("R", $"Reset {DistribKindNames[num]} Base Value"), GUILayout.Width(25)))
                     {
-                        Editing.ResetDistribution(i);
-                        if (num == currentEdit)
-                        {
-                            AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
-                            ace?.Init(Editing.GetAnimationCurve((byte)i), ace.rect, 2, 0, 0.5f);
-                        }
+                        Editing.ResetBaseValues(i);
+                        BaseValueWrappers[i].Value = Editing.baseValues[i].value;
                     }
                     GUI.enabled = true;
                     GUI.color = guic;
+                    GUILayout.EndHorizontal();
+                    // bottom
+                    GUILayout.BeginHorizontal(GUILayout.Height(25));
+                    if (BaseValueWrappers[num].Active) // draw slider
+                    {
+                        BaseValueWrappers[num].Value = GUILayout.HorizontalSlider(BaseValueWrappers[num].Value, 0f, 1f);
+                        GUI.color = Color.green;
+                        if (GUILayout.Button(new GUIContent("✓", "Accept Value"), GUILayout.Width(25)))
+                        {
+                            BaseValueWrappers[num].Active = false;
+                        }
+                        GUI.color = guic;
+                    }
+                    else // draw distribution buttons
+                    {
+                        if (GUILayout.Button(new GUIContent("Edit Distribution", "Opens Curve Editor for this Distribution Curve")))
+                        {
+                            GetOrAddACE(Editing.GetAnimationCurve((byte)i), Editing, num);
+                            currentEdit = num;
+                        }
+                        if (Clipboard != null)
+                        {
+                            if (Clipboard.data is AnimationCurve curve) // draw paste button
+                            {
+                                if (GUILayout.Button(new GUIContent("Paste", "Paste Distribution Curve"), GUILayout.Width(COPYBUTTONWIDTH)))
+                                {
+                                    Editing.SetAnimationCurve(num, curve);
+                                    Editing.ApplyDistribution(num);
+
+                                }
+                            }
+                            else DrawDisabledCopyButton();
+                        }
+                        else // draw enabled copy button
+                        {
+                            if (GUILayout.Button(new GUIContent("Copy", $"Copy {DistribKindNames[num]} Distribution Curve"), GUILayout.Width(COPYBUTTONWIDTH)))
+                            {
+                                Clipboard = new ClipboardEntry(currentIndex, num, Editing.GetAnimationCurve((byte)num));
+                            }
+                        }
+                        if (Editing.distributions[i].IsEdited) GUI.color = Color.magenta;
+                        else GUI.enabled = false;
+                        if (GUILayout.Button(new GUIContent("R", $"Reset {DistribKindNames[num]} Distribution Curve"), GUILayout.Width(25)))
+                        {
+                            Editing.ResetDistribution(i);
+                            if (num == currentEdit)
+                            {
+                                AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
+                                ace?.Init(Editing.GetAnimationCurve((byte)i), ace.rect, 2, 0, 0.5f);
+                            }
+                        }
+                        GUI.enabled = true;
+                        GUI.color = guic;
+                    }
+                    GUILayout.EndHorizontal();
+                    GUILayout.EndVertical();
+                    #endregion
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(5);
                 }
-                GUILayout.EndHorizontal();
-                GUILayout.EndVertical();
                 #endregion
+
+                DrawVectorControl("Gravity", (a) => Editing.IsGravityEdited(a), gravityWrapper, ref Editing.gravity, Editing.ApplyGravity, Editing.ResetGravity);
+                DrawVectorControl("Force", (a) => Editing.IsForceEdited(a), forceWrapper, ref Editing.force, Editing.ApplyForce, Editing.ResetForce);
+                DrawVectorControl("EndOffset", (a) => Editing.IsEndOffsetEdited(a), endOffsetWrapper, ref Editing.endOffset, Editing.ApplyEndOffset, Editing.ResetEndOffset);
+
+                GUILayout.EndScrollView();
+
+                #region Right Side - Footer
+                GUILayout.BeginHorizontal(); // bone level buttons
+                if (Clipboard != null && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
+                {
+                    if (GUILayout.Button("Paste All"))
+                    {
+                        Editing.PasteData(copied);
+                    }
+                }
+                else // draw Copy button
+                {
+                    if (GUILayout.Button("Copy All"))
+                    {
+                        Clipboard = new ClipboardEntry(currentIndex, -1, Editing);
+                    }
+                }
+                if (Editing.IsEdited()) GUI.color = Color.magenta;
+                else GUI.enabled = false;
+                if (GUILayout.Button("Reset All"))
+                {
+                    Editing.ResetAll();
+                }
+                GUI.enabled = true; GUI.color = guic;
+                if (Clipboard != null) GUI.color = Color.red;
+                else GUI.enabled = false;
+                if (GUILayout.Button("Clear Clipboard"))
+                {
+                    Clipboard = null;
+                }
+                GUI.enabled = true; GUI.color = guic;
                 GUILayout.EndHorizontal();
-                GUILayout.Space(5);
+                #endregion
+                GUILayout.EndVertical();
             }
-            #endregion
-
-            DrawVectorControl("Gravity", (a) => Editing.IsGravityEdited(a), gravityWrapper, ref Editing.gravity, Editing.ApplyGravity, Editing.ResetGravity);
-            DrawVectorControl("Force", (a) => Editing.IsForceEdited(a), forceWrapper, ref Editing.force, Editing.ApplyForce, Editing.ResetForce);
-            DrawVectorControl("EndOffset", (a) => Editing.IsEndOffsetEdited(a), endOffsetWrapper, ref Editing.endOffset, Editing.ApplyEndOffset, Editing.ResetEndOffset);
-
-            GUILayout.EndScrollView();
-
-            #region Right Side - Footer
-            GUILayout.BeginHorizontal(); // bone level buttons
-            if (Clipboard != null && Clipboard.boneIndex != currentIndex && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
-            {
-                if (GUILayout.Button("Paste All"))
-                {
-                    Editing.PasteData(copied);
-                }
-            }
-            else // draw Copy button
-            {
-                if (GUILayout.Button("Copy All"))
-                {
-                    Clipboard = new ClipboardEntry(currentIndex, -1, Editing);
-                }
-            }
-            if (Editing.IsEdited()) GUI.color = Color.magenta;
-            else GUI.enabled= false;
-            if (GUILayout.Button("Reset All"))
-            {
-                Editing.ResetAll();
-            }
-            GUI.enabled = true; GUI.color = guic;
-            if (Clipboard != null) GUI.color = Color.red;
-            else GUI.enabled = false;
-            if (GUILayout.Button("Clear Clipboard"))
-            {
-                Clipboard = null;
-            }
-            GUI.enabled = true; GUI.color = guic;
-            GUILayout.EndHorizontal();
-            #endregion
-            GUILayout.EndVertical();
             #endregion
 
             GUILayout.EndHorizontal();

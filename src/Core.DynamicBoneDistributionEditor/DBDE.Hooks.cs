@@ -12,7 +12,13 @@ namespace DynamicBoneDistributionEditor
         [HarmonyPrefix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeCoordinateType), typeof(ChaFileDefine.CoordinateType), typeof(bool))]
         private static void ChangeCoordinateTypePrefix(ChaControl __instance)
         {
-            __instance.GetComponent<DBDECharaController>()?.CoordinateChangeEvent();
+            DBDECharaController c = __instance.GetComponent<DBDECharaController>();
+            if (c != null)
+            {
+                DBDE.Logger.LogDebug("CoordinateChanged");
+                c.IsLoading = true;
+                c.CoordinateChangeEvent();
+            }
         }
 
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesBot))]
