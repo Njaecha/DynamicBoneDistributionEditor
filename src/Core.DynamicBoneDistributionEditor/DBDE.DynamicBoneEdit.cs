@@ -225,7 +225,7 @@ namespace DynamicBoneDistributionEditor
             DynamicBone db = PrimaryDynamicBone;
             if (db == null ) return;
 
-            if (MakerAPI.InsideMaker) initalActive = DynamicBones.Any(d => d.enabled);
+            if (MakerAPI.InsideMaker) initalActive = _active = DynamicBones.Any(d => d.enabled);
             else _active = DynamicBones.Any(d => d.enabled);
 
             distributions[0].value = (db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes());
