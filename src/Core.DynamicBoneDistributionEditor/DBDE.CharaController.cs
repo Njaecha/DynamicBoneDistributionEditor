@@ -699,7 +699,7 @@ namespace DynamicBoneDistributionEditor
 
         private List<DynamicBone> WouldYouBeSoKindTohandMeTheDynamicBonePlease(string name, int? slot = null)
         {
-            if (DynamicBoneCache.TryGetValue(slot ?? -1, out var a) && a.TryGetValue(name, out var dBone) && !dBone.IsNullOrEmpty() && !dBone.Any(d => d.m_Root == null)) return dBone;
+            if (DynamicBoneCache.TryGetValue(slot ?? -1, out var a) && a.TryGetValue(name, out var dBones) && !dBones.IsNullOrEmpty() && !dBones.Any(d =>  d == null || d.m_Root == null)) return dBones;
 
             List<DynamicBone> searchList = new List<DynamicBone>();
             if (slot.HasValue) searchList = ChaControl.GetAccessoryComponent(slot.Value)?.GetComponentsInChildren<DynamicBone>(true)?
