@@ -7,6 +7,7 @@ using MessagePack;
 using KKAPI.Utilities;
 using DBDE.KK_Plugins.DynamicBoneEditor;
 using UniRx;
+using KKAPI.Maker;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -224,7 +225,8 @@ namespace DynamicBoneDistributionEditor
             DynamicBone db = PrimaryDynamicBone;
             if (db == null ) return;
 
-            _active = DynamicBones.Any(d => d.enabled);
+            if (MakerAPI.InsideMaker) initalActive = _active = DynamicBones.Any(d => d.enabled);
+            else _active = DynamicBones.Any(d => d.enabled);
 
             distributions[0].value = (db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes());
             distributions[1].value = (db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes());
@@ -754,6 +756,12 @@ namespace DynamicBoneDistributionEditor
                 db.UpdateParticles();
             }
             UpdateActiveStack();
+        }
+
+        public override string ToString()
+        {
+            if (_primary != null && _primary.m_Root != null) return _primary.m_Root.ToString();
+            return "DeadBone " + base.ToString();
         }
     }
 }
