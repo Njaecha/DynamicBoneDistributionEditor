@@ -18,15 +18,41 @@ namespace DynamicBoneDistributionEditor
         private const float VSLIDERMIN = -0.03f;
         private const float VSLIDERMAX = 0.03f;
 
+        #region fields for DynamicBones
+        private readonly string[] DistribKindNames = new string[] { "Damping", "Elasticity", "Interia", "Radius", "Stiffness" };
+        private readonly string[] axisNames = new string[] { "None", "X", "Y", "Z" };
+        
         /// <summary>
         /// Function used to get DB List with Key
         /// </summary>
-		private Func<List<DBDEDynamicBoneEdit>> DBDEGetter = null;
+        private Func<List<DBDEDynamicBoneEdit>> DBDEGetter = null;
 
         /// <summary>
         /// Function called when user presses the "Refresh Bonelist" button
         /// </summary>
         private Action RefreshBoneList;
+
+        /// <summary>
+        /// Holds information helping with editing the base values
+        /// </summary>
+        private BaseValueEditWrapper[] BaseValueWrappers;
+
+        private Vector3EditWrapper gravityWrapper;
+        private Vector3EditWrapper forceWrapper;
+        private Vector3EditWrapper endOffsetWrapper;
+        #endregion
+
+        #region fields for DynamicBoneColliders
+
+        private Func<List<DBDEDynamicBoneColliderEdit>> ColliderGetter = null;
+        private Action RefreshColliderList;
+
+        private BaseValueEditWrapper radiusWrapper;
+        private BaseValueEditWrapper lengthWrapper;
+
+        private Vector3EditWrapper offsetWrapper;
+
+        #endregion
 
         /// <summary>
         /// Index of DB in List
@@ -39,15 +65,6 @@ namespace DynamicBoneDistributionEditor
         private int? currentEdit = null;
 
         /// <summary>
-        /// Holds information helping with editing the base values
-        /// </summary>
-        private BaseValueEditWrapper[] BaseValueWrappers;
-
-        private Vector3EditWrapper gravityWrapper;
-        private Vector3EditWrapper forceWrapper;
-        private Vector3EditWrapper endOffsetWrapper;
-
-        /// <summary>
         /// Clipboard used to copy settings
         /// </summary>
         private ClipboardEntry Clipboard;
@@ -55,8 +72,6 @@ namespace DynamicBoneDistributionEditor
         private RenderTexture rTex;
         private Camera rCam;
 
-        private readonly string[] DistribKindNames = new string[] { "Damping", "Elasticity", "Interia", "Radius", "Stiffness" };
-        private readonly string[] axisNames = new string[] { "None", "X", "Y", "Z" };
 
         private Rect windowRect = new Rect(100, 100, 650, 450);
         private Vector2 LeftSideScroll = new Vector2();
