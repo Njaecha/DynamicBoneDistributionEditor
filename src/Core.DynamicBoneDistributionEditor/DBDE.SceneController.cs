@@ -76,12 +76,19 @@ namespace DynamicBoneDistributionEditor
         {
             PluginData data = new PluginData();
 
-            data.data.Add("Edits", MessagePackSerializer.Serialize(DistributionEdits.Select(e => new KeyValuePair<int, List<byte[]>>(e.Key, e.Value.Select(de =>
+            if(DistributionEdits.Count == 0)
             {
-                de.ReferToDynamicBone();
-                return de.Sersialise();
-            }).ToList())).ToDictionary(x => x.Key, x => x.Value)));
-            SetExtendedData(data);
+                SetExtendedData(null);
+            }
+            else
+            {
+                data.data.Add("Edits", MessagePackSerializer.Serialize(DistributionEdits.Select(e => new KeyValuePair<int, List<byte[]>>(e.Key, e.Value.Select(de =>
+                {
+                    de.ReferToDynamicBone();
+                    return de.Sersialise();
+                }).ToList())).ToDictionary(x => x.Key, x => x.Value)));
+                SetExtendedData(data);
+            }
         }
 
         protected override void OnObjectDeleted(ObjectCtrlInfo objectCtrlInfo)
