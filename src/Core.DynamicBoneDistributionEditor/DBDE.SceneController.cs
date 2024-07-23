@@ -74,14 +74,13 @@ namespace DynamicBoneDistributionEditor
 
         protected override void OnSceneSave()
         {
-            PluginData data = new PluginData();
-
             if(DistributionEdits.Count == 0)
             {
                 SetExtendedData(null);
             }
             else
             {
+                PluginData data = new PluginData();
                 data.data.Add("Edits", MessagePackSerializer.Serialize(DistributionEdits.Select(e => new KeyValuePair<int, List<byte[]>>(e.Key, e.Value.Select(de =>
                 {
                     de.ReferToDynamicBone();
