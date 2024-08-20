@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -24,37 +25,51 @@ namespace DynamicBoneDistributionEditor
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesBot))]
         private static void ChangeClothsBotPostfix(ChaControl __instance)
         {
-            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_clothesBot").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesBra))]
         private static void ChangeClothsBraPostfix(ChaControl __instance)
         {
-            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_bra").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesGloves))]
         private static void ChangeClothsGlovesPostfix(ChaControl __instance)
         {
-            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_gloves").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesPanst))]
         private static void ChangeClothsPanstPostfix(ChaControl __instance)
         {
-            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_panst").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesShoes))]
-        private static void ChangeClothsShoesPostfix(ChaControl __instance)
+        private static void ChangeClothsShoesPostfix(ChaControl __instance, int type)
         {
-            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+            string t = type == 0 ? "ct_shoes_inner" : "ct_shoes_outer";
+            GameObject clothesGameObject = __instance.transform.Find($"BodyTop/{t}").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
-        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesTop))]
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesSocks))]
         private static void ChangeClothsSocksPostfix(ChaControl __instance)
         {
-            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_socks").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
-        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesShoes))]
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesTop))]
         private static void ChangeClothsTopPostfix(ChaControl __instance)
         {
-            __instance.GetComponent<DBDECharaController>()?.ClothesChanged();
+            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_clothesTop").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
+        }
+        [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesShorts))]
+        private static void ChangeClothsShortsPostfix(ChaControl __instance)
+        {
+            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_shorts").gameObject;
+            __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
     }
 }

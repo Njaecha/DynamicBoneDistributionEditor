@@ -376,12 +376,18 @@ namespace DynamicBoneDistributionEditor
                 #region Right Side - Header
                 GUILayout.BeginHorizontal(); // header
                 GUILayout.Label(new GUIContent(Editing.GetButtonName()), HeadStyle);
+                if (MakerAPI.InsideAndLoaded && Editing.ReidentificationData is KeyValuePair<int, string> kvp)
+                {
+                    bool noShake = MakerAPI.GetCharacterControl().nowCoordinate.accessory.parts[kvp.Key].noShake;
+                    if (noShake) GUI.enabled = false;
+                }
                 if (Editing.isActiveEdited()) GUI.color = Color.magenta;
                 if (GUILayout.Button(new GUIContent(Editing.active ? "ON" : "OFF", "Toggle DynamicBone"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
                 {
                     Editing.active = !Editing.active;
                 }
                 GUI.color = guic;
+                GUI.enabled = true;
                 GUILayout.EndHorizontal();
                 #endregion
 
