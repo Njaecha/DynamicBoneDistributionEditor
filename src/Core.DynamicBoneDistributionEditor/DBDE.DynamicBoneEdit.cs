@@ -8,6 +8,7 @@ using KKAPI.Utilities;
 using DBDE.KK_Plugins.DynamicBoneEditor;
 using UniRx;
 using KKAPI.Maker;
+using static AnimationCurveEditor.AnimationCurveEditor.KeyframeEditedArgs;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -34,10 +35,11 @@ namespace DynamicBoneDistributionEditor
         public bool active {get => _active; set => SetActive(value); }
 
         private DynamicBone _primary;
-        public DynamicBone PrimaryDynamicBone { get { 
-                if (_primary == null)
+        public DynamicBone PrimaryDynamicBone { get {
+                List<DynamicBone> dbs = DynamicBones;
+                if (_primary == null || dbs.Contains(_primary))
                 {
-                    _primary = DynamicBones.FirstOrDefault();
+                    _primary = dbs.FirstOrDefault();
                 } 
                 return _primary; 
             } private set => _primary = value; }
@@ -88,14 +90,15 @@ namespace DynamicBoneDistributionEditor
 		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> AccessorFunciton, DBDEDynamicBoneEdit copyFrom)
 		{
             this.AccessorFunciton = AccessorFunciton;
-            DynamicBone db = PrimaryDynamicBone = DynamicBones.FirstOrDefault();
+            List<DynamicBone> dbs = DynamicBones;
+            DynamicBone db = PrimaryDynamicBone = dbs.Any(b => b.enabled) ? dbs.FindAll(b => b.enabled).FirstOrDefault() : dbs.FirstOrDefault();
             if (db == null)
             {
                 DBDE.Logger.LogError("Creating DBDEDynamicBoneEdit failed, Accessor returned zero Dynamic Bones!");
                 return;
             }
 
-            initalActive = _active = db.enabled;
+            initalActive = _active = dbs.Any(b => b.enabled);
             this.distributions = new EditableValue<Keyframe[]>[]
             {
                 new EditableValue<Keyframe[]>(db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
@@ -125,15 +128,16 @@ namespace DynamicBoneDistributionEditor
 		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> AccessorFunciton, byte[] serialised = null, DynamicBoneData DBE = null)
 		{
             this.AccessorFunciton = AccessorFunciton;
-            DynamicBone db = PrimaryDynamicBone = DynamicBones.FirstOrDefault();
+            List<DynamicBone> dbs = DynamicBones;
+            DynamicBone db = PrimaryDynamicBone = dbs.Any(b => b.enabled) ? dbs.FindAll(b => b.enabled).FirstOrDefault() : dbs.FirstOrDefault();
             if (db == null)
             {
                 DBDE.Logger.LogError("Creating DBDEDynamicBoneEdit failed, Accessor returned zero Dynamic Bones!");
                 return;
             }
 
-            initalActive = _active = db.enabled;
-			this.distributions = new EditableValue<Keyframe[]>[]
+            initalActive = _active = dbs.Any(b => b.enabled);
+            this.distributions = new EditableValue<Keyframe[]>[]
 			{
 				new EditableValue<Keyframe[]>(db.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
 				new EditableValue<Keyframe[]>(db.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes()),
@@ -225,8 +229,12 @@ namespace DynamicBoneDistributionEditor
             DynamicBone db = PrimaryDynamicBone;
             if (db == null ) return;
 
-            if (MakerAPI.InsideMaker) initalActive = _active = DynamicBones.Any(d => d.enabled);
-            else _active = DynamicBones.Any(d => d.enabled);
+            if (MakerAPI.InsideAndLoaded && ReidentificationData is KeyValuePair<int, string> kvp)
+            {
+                bool noShake = MakerAPI.GetCharacterControl().nowCoordinate.accessory.parts[kvp.Key].noShake;
+                initalActive = !noShake;
+            }
+            _active = DynamicBones.Any(d => d.enabled);
 
             distributions[0].value = (db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes());
             distributions[1].value = (db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes());
@@ -249,6 +257,36 @@ namespace DynamicBoneDistributionEditor
             ApplyAll();
         }
 
+        internal void ReferInitialsToDynamicBone(DynamicBone db)
+        {
+            Keyframe[] DE0frames = db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes();
+            distributions[0] = new EditableValue<Keyframe[]>(DE0frames, distributions[0].IsEdited ? distributions[0] : DE0frames);
+            Keyframe[] DE1frames = db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes();
+            distributions[1] = new EditableValue<Keyframe[]>(DE1frames, distributions[1].IsEdited ? distributions[1] : DE1frames);
+            Keyframe[] DE2frames = db?.m_InertDistrib == null ? getDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : getDefaultCurveKeyframes();
+            distributions[2] = new EditableValue<Keyframe[]>(DE2frames, distributions[2].IsEdited ? distributions[2] : DE2frames);
+            Keyframe[] DE3frames = db?.m_RadiusDistrib == null ? getDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : getDefaultCurveKeyframes();
+            distributions[3] = new EditableValue<Keyframe[]>(DE3frames, distributions[3].IsEdited ? distributions[3] : DE3frames);
+            Keyframe[] DE4frames = db?.m_StiffnessDistrib == null ? getDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : getDefaultCurveKeyframes();
+            distributions[4] = new EditableValue<Keyframe[]>(DE4frames, distributions[4].IsEdited ? distributions[4] : DE4frames);
+
+            baseValues[0] = new EditableValue<float>(db.m_Damping, baseValues[0].IsEdited ? baseValues[0] : db.m_Damping);
+            baseValues[1] = new EditableValue<float>(db.m_Elasticity, baseValues[1].IsEdited ? baseValues[1] : db.m_Elasticity);
+            baseValues[2] = new EditableValue<float>(db.m_Inert, baseValues[2].IsEdited ? baseValues[2] : db.m_Inert);
+            baseValues[3] = new EditableValue<float>(db.m_Radius, baseValues[3].IsEdited ? baseValues[3] : db.m_Radius);
+            baseValues[4] = new EditableValue<float>(db.m_Stiffness, baseValues[4].IsEdited ? baseValues[4] : db.m_Stiffness);
+
+            gravity = new EditableValue<Vector3>(db.m_Gravity, gravity.IsEdited ? gravity : db.m_Gravity);
+            force = new EditableValue<Vector3>(db.m_Force, force.IsEdited ? force : db.m_Force);
+            endOffset = new EditableValue<Vector3>(db.m_EndOffset, endOffset.IsEdited ? endOffset : db.m_EndOffset);
+
+            freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis, freezeAxis.IsEdited ? freezeAxis : db.m_FreezeAxis);
+
+            db.enabled = active;
+
+            ApplyAll();
+        }
+
         private void LoadVector(byte[] binary, ref EditableValue<Vector3> editableValue)
         {
             var sValue = MessagePackSerializer.Deserialize<Vector3>(binary);
@@ -263,7 +301,7 @@ namespace DynamicBoneDistributionEditor
 
         public void SetActive(bool active)
         {
-            DynamicBones.ForEach(db => db.enabled = active);
+            PrimaryDynamicBone.enabled = active;
             _active = active;
         }
 
@@ -459,29 +497,29 @@ namespace DynamicBoneDistributionEditor
         {
             List<DynamicBone> DBS = DynamicBones;
             if (DBS.IsNullOrEmpty()) return;
-            if ((DBS.Count > 1 || always) && active)
+            if (active && DBS.FindAll(b => b.enabled == true).Count() == 1) return;
+            if (DBS.Count > 1 || always)
             {
-                List<int> indeces = new List<int>();
-                for (int i = 0; i < DBS.Count; i++)
+                foreach (DynamicBone db in DBS) db.enabled = false; //disable others
+                if (active)
                 {
-                    if (DBS[i] == null) continue;
-                    if (DBS[i].gameObject.activeInHierarchy) indeces.Add(i);
+                    PrimaryDynamicBone.enabled = true; // enable primary
                 }
-                if (indeces.IsNullOrEmpty()) return;
-                DBS[indeces[0]].enabled = true; //enable first one
-                indeces.RemoveAt(0);
-                foreach (int i in indeces) DBS[i].enabled = false; //enable first disable others
             }
         }
 
         public void ApplyAll()
         {
+            _ = PrimaryDynamicBone; // make sure PrimaryDynmicBone is always obtained
+
             ApplyDistribution();
             ApplyBaseValues();
             ApplyGravity();
             ApplyForce();
             ApplyEndOffset();
             ApplyFreezeAxis();
+            // does this create issues?
+            SetActive(active);
         }
 
         public void ResetAll()

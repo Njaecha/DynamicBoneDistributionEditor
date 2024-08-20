@@ -39,6 +39,14 @@ namespace DynamicBoneDistributionEditor
             this._edited = false;
         }
 
+        public EditableValue(T initalValue, T actualValue)
+        {
+            this._orgValue = initalValue;
+            this._value = actualValue;
+            this._edited = true;
+            this.value = actualValue; // use value setter to set _edited correctly
+        }
+
         public void Reset()
         {
             this._edited = false;

@@ -369,18 +369,29 @@ namespace DynamicBoneDistributionEditor
             base.Update();
         }
 
-        internal void ClothesChanged()
+        internal void ClothesChanged(GameObject clothGO)
         {
             if (IsLoading) return;
+            DBDE.UI.UpdateUIWhileOpen = false;
+            
             DynamicBoneCache.Clear();
+            RefreshBoneList();
+
+            List<DynamicBone> clothDBs = clothGO.GetComponentsInChildren<DynamicBone>(true).ToList();
+
             if (DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType))
             {
                 foreach (var edit in DistributionEdits[ChaControl.fileStatus.coordinateType])
                 {
-                    edit.UpdateActiveStack(true);
+                    DynamicBone db = clothDBs.Find(b => b.m_Root.name == edit.PrimaryDynamicBone.m_Root.name);
+                    if (db != null)
+                    {
+                        edit.ReferInitialsToDynamicBone(db);
+                    }
+                    edit.UpdateActiveStack();
                 }
             }
-            RefreshBoneList();
+            DBDE.UI.UpdateUIWhileOpen = true;
         }
 
         internal void CoordinateChangeEvent()
@@ -494,14 +505,15 @@ namespace DynamicBoneDistributionEditor
         internal void AccessoryChangedEvent(int slot)
         {
             DynamicBoneCache.Clear();
+            RefreshBoneList();
             if (DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType))
             {
                 foreach (var edit in DistributionEdits[ChaControl.fileStatus.coordinateType])
                 {
+                    edit.ApplyAll();
                     edit.UpdateActiveStack(true);
                 }
             }
-            RefreshBoneList();
         }
 
         internal void AccessoryTransferedEvent(int source, int destination)

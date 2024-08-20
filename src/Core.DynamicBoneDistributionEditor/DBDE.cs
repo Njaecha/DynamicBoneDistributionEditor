@@ -32,7 +32,7 @@ namespace DynamicBoneDistributionEditor
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "1.3.1";
+        public const string Version = "1.3.2";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
@@ -61,10 +61,18 @@ namespace DynamicBoneDistributionEditor
 
             MakerAPI.MakerBaseLoaded += createSideBarToggle;
 
+            MakerAPI.MakerExiting += leavingMaker;
+
+
             loadSettingsAsDefault = Config.Bind("", "Load Settings as default", false, "Enable this to load the settings saved by DBDE as defaults (for the revert buttons) instead of the dynamic bone's own defaults (set by game/zipmod).");
             drawGizmos = Config.Bind("", "Draw Gizmos", true, "Toggle gizmos. Can also be toggled in the UI");
 
             Instance = this;
+        }
+
+        private void leavingMaker(object sender, EventArgs e)
+        {
+            UI.Close();
         }
 
         private void ScreenshotManager_OnPostCapture()
