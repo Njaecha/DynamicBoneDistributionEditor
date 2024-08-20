@@ -50,7 +50,7 @@ namespace DynamicBoneDistributionEditor
             yield return null; // wait two frames so that all other mods have applies their stuff
 
             PluginData data = GetExtendedData();
-            if (data.data.TryGetValue("Edits", out var bytes) && bytes != null)
+            if (data != null && data.data.TryGetValue("Edits", out var bytes) && bytes != null)
             {
                 Dictionary<int, List<byte[]>> intermediate = MessagePackSerializer.Deserialize<Dictionary<int, List<byte[]>>>((byte[])bytes);
 
