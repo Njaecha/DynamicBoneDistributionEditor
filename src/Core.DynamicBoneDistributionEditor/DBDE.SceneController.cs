@@ -84,7 +84,7 @@ namespace DynamicBoneDistributionEditor
                 data.data.Add("Edits", MessagePackSerializer.Serialize(DistributionEdits.Select(e => new KeyValuePair<int, List<byte[]>>(e.Key, e.Value.Select(de =>
                 {
                     de.ReferToDynamicBone();
-                    return de.Sersialise();
+                    return de.Serialise();
                 }).ToList())).ToDictionary(x => x.Key, x => x.Value)));
                 SetExtendedData(data);
             }

@@ -19,7 +19,7 @@ namespace DynamicBoneDistributionEditor
         private const float VSLIDERMAX = 0.03f;
 
         #region fields for DynamicBones
-        private readonly string[] DistribKindNames = new string[] { "Damping", "Elasticity", "Interia", "Radius", "Stiffness" };
+        private readonly string[] DistribKindNames = new string[] { "Damping", "Elasticity", "Inertia", "Radius", "Stiffness" };
         private readonly string[] axisNames = new string[] { "None", "X", "Y", "Z" };
         
         /// <summary>
@@ -40,6 +40,8 @@ namespace DynamicBoneDistributionEditor
         private Vector3EditWrapper gravityWrapper;
         private Vector3EditWrapper forceWrapper;
         private Vector3EditWrapper endOffsetWrapper;
+        
+        private BaseValueEditWrapper weightWrapper;
         #endregion
 
         #region fields for DynamicBoneColliders
@@ -115,11 +117,11 @@ namespace DynamicBoneDistributionEditor
             if (KKAPI.Maker.MakerAPI.InsideAndLoaded && currentEdit.HasValue)
             {
                 AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>();
-                if (ace != null && ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == true)
+                if (ace && ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == true)
                 {
                     DBDE.Instance.getMakerCursorMangaer().enabled = false;
                 }
-                if (ace != null && !ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == false)
+                if (ace && !ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == false)
                 {
                     DBDE.Instance.getMakerCursorMangaer().enabled = true;
                 }
@@ -129,22 +131,17 @@ namespace DynamicBoneDistributionEditor
 
         public void Close()
         {
-            close();
-        }
-
-        private void close()
-        {
             TitleAppendix = "";
             DBDEGetter = null;
             RefreshBoneList = null;
             currentIndex = 0;
             currentEdit = null;
             referencedChara = null;
-            if (KKAPI.Maker.MakerAPI.InsideAndLoaded) DBDE.toggle.SetValue(false);
+            if (KKAPI.Maker.MakerAPI.InsideAndLoaded) DBDE.toggle?.SetValue(false);
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
             ace?.close();
             DBDEGizmoController gizmo = Camera.main.GetOrAddComponent<DBDEGizmoController>();
-            gizmo.Editing = null;
+            if (gizmo) gizmo.Editing = null;
         }
 
         private bool CanShow()
@@ -159,17 +156,17 @@ namespace DynamicBoneDistributionEditor
             return true;
         }
 
-        int BeenHiddenForFrames = 0;
+        int _beenHiddenForFrames = 0;
 
         private void OnGUI()
         {
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
             if (KKAPI.KoikatuAPI.GetCurrentGameMode() == GameMode.Maker && !CanShow())
             {
-                if (ace != null) ace.enabled = false;
+                if (ace) ace.enabled = false;
                 return;
             }
-            else if (ace != null && ace.enabled == false) ace.enabled = true;
+            else if (ace && ace.enabled == false) ace.enabled = true;
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), rTex);
             if (DBDEGetter != null)
             {
@@ -179,21 +176,21 @@ namespace DynamicBoneDistributionEditor
                 // if we dont do this and the UI stays open in studio while the character its editing is deleted it goes nuts
                 try { DBDES = DBDEGetter.Invoke(); DBDES.ForEach(d => d.GetButtonName()); } catch (Exception) { 
                     draw = false; 
-                    BeenHiddenForFrames++; 
+                    _beenHiddenForFrames++; 
                     RefreshBoneList.Invoke();
                 }
                 if (draw && !DBDES.IsNullOrEmpty())
                 {
                     if (DBDES.Count <= currentIndex) SetCurrentRightSide(DBDES.Count - 1);
-                    BeenHiddenForFrames = 0;
+                    _beenHiddenForFrames = 0;
                     windowRect = GUI.Window(5858350, windowRect, WindowFunction, $"DBDE v{DBDE.Version} - {TitleAppendix}", KKAPI.Utilities.IMGUIUtils.SolidBackgroundGuiSkin.window);
                 }
             }
             if (currentEdit.HasValue) rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>()?.OnGUI();
 
-            if (BeenHiddenForFrames > 30)
+            if (_beenHiddenForFrames > 30)
             {
-                BeenHiddenForFrames = 0;
+                _beenHiddenForFrames = 0;
                 Close();
             }
 
@@ -255,13 +252,13 @@ namespace DynamicBoneDistributionEditor
             DBDEDynamicBoneEdit Editing = DBDES[boneIndex];
             if (Editing == null) return;
             DynamicBone db = Editing.PrimaryDynamicBone;
-            if (db == null)
+            if (!db)
             {
                 RefreshBoneList.Invoke();
                 return;
             }
             currentIndex = boneIndex;
-            BaseValueWrappers = new BaseValueEditWrapper[]
+            BaseValueWrappers = new[]
             {
                 new BaseValueEditWrapper(db.m_Damping, (v) => { Editing.baseValues[0].value = v; Editing.ApplyBaseValues(0); }),
                 new BaseValueEditWrapper(db.m_Elasticity, (v) => { Editing.baseValues[1].value = v; Editing.ApplyBaseValues(1); }),
@@ -272,6 +269,9 @@ namespace DynamicBoneDistributionEditor
             gravityWrapper = new Vector3EditWrapper(db.m_Gravity, (v) => { Editing.gravity.value = v; Editing.ApplyGravity(); });
             forceWrapper = new Vector3EditWrapper(db.m_Force, (v) => { Editing.force.value = v; Editing.ApplyForce(); });
             endOffsetWrapper = new Vector3EditWrapper(db.m_EndOffset, (v) => { Editing.endOffset.value = v; Editing.ApplyEndOffset(); });
+            
+            weightWrapper = new BaseValueEditWrapper(db.m_Weight, (v) => { Editing.weight.value = v; Editing.ApplyWeight();});
+            
             DBDEGizmoController gizmo = Camera.main.GetOrAddComponent<DBDEGizmoController>();
             gizmo.Editing = Editing;
         }
@@ -303,7 +303,7 @@ namespace DynamicBoneDistributionEditor
 
             if (GUI.Button(new Rect(windowRect.width - 18, 2, 15, 15), new GUIContent("X"), buttonStyle))
             {
-                close();
+                Close();
                 return;
             }
             if (GUI.Button(new Rect(1,1, 90, 15), new GUIContent(DBDE.drawGizmos.Value ? "Gizmos ON" : "Gismos OFF", "Toggle Gizmos.\nBlue arrow: Gravity.\nRed arrow: Force.\nGreen arrow: Applied force")))
@@ -433,8 +433,79 @@ namespace DynamicBoneDistributionEditor
                 GUILayout.EndHorizontal();
                 GUILayout.Space(5);
                 #endregion
+
+                #region Right Side - Weight
+                GUILayout.BeginHorizontal();
+                GUI.color = Editing.isWeigthEdited() ? Color.magenta : guic;
+                GUILayout.Label("Weight" + (Editing.isWeigthEdited() ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6), GUILayout.Height(weightWrapper.Active ? 50 : 25)); // width 1/6
+                GUI.color = guic;
+                
+                GUILayout.BeginVertical(); // two rows
+                // top
+                GUILayout.BeginHorizontal(GUILayout.Height(25));
+                if (weightWrapper.Active) // draw input field
+                {
+                    weightWrapper.Text = GUILayout.TextField(weightWrapper.Text);
+                }
+                else // draw button
+                {
+                    if (GUILayout.Button(new GUIContent("Value: " + ((float)Editing.weight).ToString("0.000"), $"Weight. Click to edit!")))
+                    {
+                        weightWrapper.Activate(Editing.weight);
+                    }
+                }
+                if (Clipboard != null)
+                {
+                    if (Clipboard.data is float value && Clipboard.distribIndex != -2) // draw paste button
+                    {
+                        string tooltipValue = value.ToString("0.000");
+                        if (GUILayout.Button(new GUIContent("Paste", $"Paste Value: {tooltipValue}"), GUILayout.Width(COPYBUTTONWIDTH)))
+                        {
+                            Editing.weight.value = value;
+                            Editing.ApplyWeight();
+                            if (weightWrapper.Active) weightWrapper.Value = value;
+
+                        }
+                    }
+                    else DrawDisabledCopyButton();
+                }
+                else // draw enabled copy button
+                {
+                    if (GUILayout.Button(new GUIContent("Copy", $"Copy Weight"), GUILayout.Width(COPYBUTTONWIDTH)))
+                    {
+                        Clipboard = new ClipboardEntry(currentIndex, -3, Editing.weight.value);
+                    }
+                }
+                if (Editing.weight.IsEdited) GUI.color = Color.magenta;
+                else GUI.enabled = false;
+                if (GUILayout.Button(new GUIContent("R", $"Reset Weight"), GUILayout.Width(25)))
+                {
+                    Editing.ResetWeight();
+                    weightWrapper.Value = Editing.weight.value;
+                }
+                GUI.enabled = true;
+                GUI.color = guic;
+                
+                GUILayout.EndHorizontal();
+                // bottom
+                GUILayout.BeginHorizontal(GUILayout.Height(25));
+                if (weightWrapper.Active) // draw slider
+                {
+                    weightWrapper.Value = GUILayout.HorizontalSlider(weightWrapper.Value, 0f, 1f);
+                    GUI.color = Color.green;
+                    if (GUILayout.Button(new GUIContent("✓", "Accept Value"), GUILayout.Width(25)))
+                    {
+                        weightWrapper.Active = false;
+                    }
+                    GUI.color = guic;
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.EndVertical();
+                GUILayout.EndHorizontal();
+                #endregion
+                
                 #region Right Side - BaseValue/Distribution
-                for (int i = 0; i < 5; i++) // for "Damping", "Elasticity", "Interia", "Radius", "Stiffness"
+                for (int i = 0; i < 5; i++) // for "Damping", "Elasticity", "Inertia", "Radius", "Stiffness"
                 {
                     int num = i;
                     GUILayout.BeginHorizontal();
@@ -778,7 +849,7 @@ namespace DynamicBoneDistributionEditor
             GUILayout.EndHorizontal();
         }
 
-        private Vector3 GetNewVectorForAxis(float value, Vector3EditWrapper.Axis axis, EditableValue<Vector3> editableValue)
+        private static Vector3 GetNewVectorForAxis(float value, Vector3EditWrapper.Axis axis, EditableValue<Vector3> editableValue)
         {
             switch (axis)
             {

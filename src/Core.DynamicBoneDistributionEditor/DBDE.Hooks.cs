@@ -25,50 +25,66 @@ namespace DynamicBoneDistributionEditor
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesBot))]
         private static void ChangeClothsBotPostfix(ChaControl __instance)
         {
-            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_clothesBot").gameObject;
+            Transform t = __instance.transform.Find("BodyTop/ct_clothesBot");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesBra))]
         private static void ChangeClothsBraPostfix(ChaControl __instance)
         {
-            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_bra").gameObject;
+            Transform t = __instance.transform.Find("BodyTop/ct_bra");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesGloves))]
         private static void ChangeClothsGlovesPostfix(ChaControl __instance)
         {
-            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_gloves").gameObject;
+            Transform t = __instance.transform.Find("BodyTop/ct_gloves");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesPanst))]
         private static void ChangeClothsPanstPostfix(ChaControl __instance)
         {
-            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_panst").gameObject;
+            Transform t = __instance.transform.Find("BodyTop/ct_panst");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesShoes))]
         private static void ChangeClothsShoesPostfix(ChaControl __instance, int type)
         {
-            string t = type == 0 ? "ct_shoes_inner" : "ct_shoes_outer";
-            GameObject clothesGameObject = __instance.transform.Find($"BodyTop/{t}").gameObject;
+            string ty = type == 0 ? "ct_shoes_inner" : "ct_shoes_outer";
+            Transform t = __instance.transform.Find($"BodyTop/{ty}");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesSocks))]
         private static void ChangeClothsSocksPostfix(ChaControl __instance)
         {
-            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_socks").gameObject;
+            Transform t = __instance.transform.Find("BodyTop/ct_socks");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesTop))]
         private static void ChangeClothsTopPostfix(ChaControl __instance)
         {
-            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_clothesTop").gameObject;
+            Transform t = __instance.transform.Find("BodyTop/ct_top");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
         [HarmonyPostfix, HarmonyPatch(typeof(ChaControl), nameof(ChaControl.ChangeClothesShorts))]
         private static void ChangeClothsShortsPostfix(ChaControl __instance)
         {
-            GameObject clothesGameObject = __instance.transform.Find("BodyTop/ct_shorts").gameObject;
+            Transform t = __instance.transform.Find("BodyTop/ct_shorts");
+            if (!t) return;
+            GameObject clothesGameObject = t.gameObject;
             __instance.GetComponent<DBDECharaController>()?.ClothesChanged(clothesGameObject);
         }
     }

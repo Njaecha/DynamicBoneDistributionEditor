@@ -105,11 +105,11 @@ namespace DynamicBoneDistributionEditor
                     if (!edit.IsEdited()) continue;
                     if (edit.ReidentificationData is KeyValuePair<int, string> rData)
                     {
-                        accessoryEdits.Add(new KeyValuePair<KeyValuePair<int, string>, byte[]>(rData, edit.Sersialise()));
+                        accessoryEdits.Add(new KeyValuePair<KeyValuePair<int, string>, byte[]>(rData, edit.Serialise()));
                     }
                     if (edit.ReidentificationData is string name)
                     {
-                        normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.Sersialise()));
+                        normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.Serialise()));
                     }
                 }
                 if (!accessoryEdits.IsNullOrEmpty()) ACC[key] = accessoryEdits;
@@ -173,9 +173,9 @@ namespace DynamicBoneDistributionEditor
             loadAccessories = true;
             cMode = false;
             cloImportAccessories = new List<int>(); // slots that are loaded new
-            if (Chainloader.PluginInfos.ContainsKey("com.jim60105.kks.coordinateloadoption"))
+            if (Chainloader.PluginInfos.ContainsKey("com.jim60105.kks.coordinateloadoption") || Chainloader.PluginInfos.ContainsKey("com.jim60105.kk.coordinateloadoption") )
             {
-                DBDE.Logger.LogDebug("Coordinate Load Option dedected");
+                DBDE.Logger.LogDebug("Coordinate Load Option detected");
                 if (GameObject.Find("CoordinateTooglePanel")?.activeInHierarchy == true)
                 {
                     DBDE.Logger.LogDebug("Coordinate Load Option enabled");
@@ -326,11 +326,11 @@ namespace DynamicBoneDistributionEditor
                 if (!edit.IsEdited()) continue;
                 if (edit.ReidentificationData is KeyValuePair<int, string> rData)
                 {
-                    accessoryEdits.Add(new KeyValuePair<KeyValuePair<int, string>, byte[]>(rData, edit.Sersialise()));
+                    accessoryEdits.Add(new KeyValuePair<KeyValuePair<int, string>, byte[]>(rData, edit.Serialise()));
                 }
                 if (edit.ReidentificationData is string name)
                 {
-                    normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.Sersialise()));
+                    normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.Serialise()));
                 }
             }
             data.data.Add("AccessoryEdits", MessagePackSerializer.Serialize(accessoryEdits));
@@ -564,7 +564,7 @@ namespace DynamicBoneDistributionEditor
                 .Where(edit => edit.ReidentificationData is KeyValuePair<int, string> kv && slots.Contains(kv.Key)) // only Edits that match the copied slots
                 .ToList()
                 // add a new DBDEDynamicBoneEdit with the same accessor (slot stays the same), same identifier (slot) and the same values
-                .ForEach(edit => DistributionEdits[destinationOutfit].Add(new DBDEDynamicBoneEdit(edit.AccessorFunciton, edit) { ReidentificationData = edit.ReidentificationData }));
+                .ForEach(edit => DistributionEdits[destinationOutfit].Add(new DBDEDynamicBoneEdit(edit.AccessorFunction, edit) { ReidentificationData = edit.ReidentificationData }));
             
             StartCoroutine(RefreshBoneListDelayed());
             DBDE.UI.UpdateUIWhileOpen = true;

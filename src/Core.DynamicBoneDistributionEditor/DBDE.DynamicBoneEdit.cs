@@ -24,11 +24,13 @@ namespace DynamicBoneDistributionEditor
 		/// 0 - Dampening, 1 - Elasticity, 2 - Intertia, 3 - Radius, 4 - Stiffness
 		/// </summary>
         public readonly EditableValue<float>[] baseValues;
-
+        
         public EditableValue<Vector3> gravity;
         public EditableValue<Vector3> force;
         public EditableValue<Vector3> endOffset;
         public EditableValue<DynamicBone.FreezeAxis> freezeAxis;
+        
+        public EditableValue<float> weight;
 
         private bool initalActive;
         private bool _active;
@@ -37,7 +39,7 @@ namespace DynamicBoneDistributionEditor
         private DynamicBone _primary;
         public DynamicBone PrimaryDynamicBone { get {
                 List<DynamicBone> dbs = DynamicBones;
-                if (_primary == null || dbs.Contains(_primary))
+                if (!_primary || dbs.Contains(_primary))
                 {
                     _primary = dbs.FirstOrDefault();
                 } 
@@ -47,25 +49,24 @@ namespace DynamicBoneDistributionEditor
         {
             get
             {
-                var x = AccessorFunciton.Invoke();
-                if (x.IsNullOrEmpty()) return new List<DynamicBone>();
-                else return x;
+                List<DynamicBone> x = AccessorFunction.Invoke();
+                return x.IsNullOrEmpty() ? new List<DynamicBone>() : x;
             }
         }
 
-        internal Func<List<DynamicBone>> AccessorFunciton { get; private set; }
+        internal Func<List<DynamicBone>> AccessorFunction { get; private set; }
 
 
         internal object ReidentificationData;
 
         internal string GetButtonName()
         {
-            string n = "";
+            var n = "";
             if (ReidentificationData is KeyValuePair<int, string> kvp) n = $"Slot {kvp.Key + 1} - ";
             return n + PrimaryDynamicBone?.m_Root?.name;
         }
 
-		private Keyframe[] getDefaultCurveKeyframes()
+		private static Keyframe[] GetDefaultCurveKeyframes()
 		{
 			return new Keyframe[2] { new Keyframe(0f, 1f), new Keyframe(1f, 1f) };
 		}
@@ -83,16 +84,17 @@ namespace DynamicBoneDistributionEditor
             this.endOffset = copyFrom.endOffset;
 
             this.SetActive(copyFrom.active);
+            this.weight = copyFrom.weight;
 
             ApplyAll();
         }
 
-		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> AccessorFunciton, DBDEDynamicBoneEdit copyFrom)
+		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> accessorFunction, DBDEDynamicBoneEdit copyFrom)
 		{
-            this.AccessorFunciton = AccessorFunciton;
+            this.AccessorFunction = accessorFunction;
             List<DynamicBone> dbs = DynamicBones;
             DynamicBone db = PrimaryDynamicBone = dbs.Any(b => b.enabled) ? dbs.FindAll(b => b.enabled).FirstOrDefault() : dbs.FirstOrDefault();
-            if (db == null)
+            if (!db)
             {
                 DBDE.Logger.LogError("Creating DBDEDynamicBoneEdit failed, Accessor returned zero Dynamic Bones!");
                 return;
@@ -101,11 +103,11 @@ namespace DynamicBoneDistributionEditor
             initalActive = _active = dbs.Any(b => b.enabled);
             this.distributions = new EditableValue<Keyframe[]>[]
             {
-                new EditableValue<Keyframe[]>(db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_InertDistrib == null ? getDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : getDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_RadiusDistrib == null ? getDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : getDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_StiffnessDistrib == null ? getDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : getDefaultCurveKeyframes())
+                new EditableValue<Keyframe[]>(db?.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_ElasticityDistrib == null ? GetDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_InertDistrib == null ? GetDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_RadiusDistrib == null ? GetDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db?.m_StiffnessDistrib == null ? GetDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : GetDefaultCurveKeyframes())
             };
             this.baseValues = new EditableValue<float>[]
             {
@@ -120,17 +122,17 @@ namespace DynamicBoneDistributionEditor
             force = new EditableValue<Vector3>(db.m_Force);
             endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
-
-
+            weight = new EditableValue<float>(db.m_Weight);
+            
             PasteData(copyFrom);
         }
 
-		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> AccessorFunciton, byte[] serialised = null, DynamicBoneData DBE = null)
+		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> AccessorFunction, byte[] serialised = null, DynamicBoneData DBE = null)
 		{
-            this.AccessorFunciton = AccessorFunciton;
+            this.AccessorFunction = AccessorFunction;
             List<DynamicBone> dbs = DynamicBones;
             DynamicBone db = PrimaryDynamicBone = dbs.Any(b => b.enabled) ? dbs.FindAll(b => b.enabled).FirstOrDefault() : dbs.FirstOrDefault();
-            if (db == null)
+            if (!db)
             {
                 DBDE.Logger.LogError("Creating DBDEDynamicBoneEdit failed, Accessor returned zero Dynamic Bones!");
                 return;
@@ -139,11 +141,11 @@ namespace DynamicBoneDistributionEditor
             initalActive = _active = dbs.Any(b => b.enabled);
             this.distributions = new EditableValue<Keyframe[]>[]
 			{
-				new EditableValue<Keyframe[]>(db.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes()),
-				new EditableValue<Keyframe[]>(db.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes()),
-				new EditableValue<Keyframe[]>(db.m_InertDistrib == null ? getDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : getDefaultCurveKeyframes()),
-				new EditableValue<Keyframe[]>(db.m_RadiusDistrib == null ? getDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : getDefaultCurveKeyframes()),
-				new EditableValue<Keyframe[]>(db.m_StiffnessDistrib == null ? getDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : getDefaultCurveKeyframes())
+				new EditableValue<Keyframe[]>(db.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes()),
+				new EditableValue<Keyframe[]>(db.m_ElasticityDistrib == null ? GetDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : GetDefaultCurveKeyframes()),
+				new EditableValue<Keyframe[]>(db.m_InertDistrib == null ? GetDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : GetDefaultCurveKeyframes()),
+				new EditableValue<Keyframe[]>(db.m_RadiusDistrib == null ? GetDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : GetDefaultCurveKeyframes()),
+				new EditableValue<Keyframe[]>(db.m_StiffnessDistrib == null ? GetDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : GetDefaultCurveKeyframes())
 			};
 			this.baseValues = new EditableValue<float>[]
 			{
@@ -158,6 +160,7 @@ namespace DynamicBoneDistributionEditor
             force = new EditableValue<Vector3>(db.m_Force);
             endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
+            weight = new EditableValue<float>(db.m_Weight);
 
 			if (serialised != null) // set DBDE specific values
 			{
@@ -184,11 +187,13 @@ namespace DynamicBoneDistributionEditor
 
             Dictionary<byte, float> DBDEBaseValues = new Dictionary<byte, float>();
             int? DBDEFreezeAxis = null;
+            float? DBDEWeight = null;
             if (serialised != null) // load DBDE Data
             {
                 List<byte[]> edits = MessagePackSerializer.Deserialize<List<byte[]>>(serialised);
                 if (!edits[1].IsNullOrEmpty()) DBDEBaseValues = MessagePackSerializer.Deserialize<Dictionary<byte, float>>(edits[1]);
                 if (!edits[5].IsNullOrEmpty()) DBDEFreezeAxis = MessagePackSerializer.Deserialize<byte?>(edits[5]);
+                if (edits.Count >= 8 && !edits[7].IsNullOrEmpty()) DBDEWeight = MessagePackSerializer.Deserialize<float>(edits[7]);
             }
             if (DBDE.loadSettingsAsDefault.Value)
             {
@@ -205,6 +210,9 @@ namespace DynamicBoneDistributionEditor
 
                 if (DBDEFreezeAxis.HasValue) freezeAxis = (EditableValue<DynamicBone.FreezeAxis>)(DynamicBone.FreezeAxis)DBDEFreezeAxis.Value;
                 else if (DBE != null && DBE.FreezeAxis.HasValue) freezeAxis = (EditableValue<DynamicBone.FreezeAxis>)DBE.FreezeAxis.Value;
+                
+                if (DBDEWeight.HasValue) weight = (EditableValue<float>)DBDEWeight.Value;
+                else if (DBE != null && DBE.Weight.HasValue) weight = (EditableValue<float>)DBE.Weight.Value;
             }
             else
             {
@@ -221,13 +229,16 @@ namespace DynamicBoneDistributionEditor
 
                 if (DBDEFreezeAxis.HasValue) freezeAxis.value = (DynamicBone.FreezeAxis)DBDEFreezeAxis.Value;
                 else if (DBE != null && DBE.FreezeAxis.HasValue) freezeAxis.value = DBE.FreezeAxis.Value;
+                
+                if (DBDEWeight.HasValue) weight.value = DBDEWeight.Value;
+                else if (DBE != null && DBE.Weight.HasValue) weight.value = DBE.Weight.Value;
             }
         }
 
         internal void ReferToDynamicBone()
         {
             DynamicBone db = PrimaryDynamicBone;
-            if (db == null ) return;
+            if (!db ) return;
 
             if (MakerAPI.InsideAndLoaded && ReidentificationData is KeyValuePair<int, string> kvp)
             {
@@ -236,11 +247,11 @@ namespace DynamicBoneDistributionEditor
             }
             _active = DynamicBones.Any(d => d.enabled);
 
-            distributions[0].value = (db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes());
-            distributions[1].value = (db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes());
-            distributions[2].value = (db?.m_InertDistrib == null ? getDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : getDefaultCurveKeyframes());
-            distributions[3].value = (db?.m_RadiusDistrib == null ? getDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : getDefaultCurveKeyframes());
-            distributions[4].value = (db?.m_StiffnessDistrib == null ? getDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : getDefaultCurveKeyframes());
+            distributions[0].value = (db?.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes());
+            distributions[1].value = (db?.m_ElasticityDistrib == null ? GetDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : GetDefaultCurveKeyframes());
+            distributions[2].value = (db?.m_InertDistrib == null ? GetDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : GetDefaultCurveKeyframes());
+            distributions[3].value = (db?.m_RadiusDistrib == null ? GetDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : GetDefaultCurveKeyframes());
+            distributions[4].value = (db?.m_StiffnessDistrib == null ? GetDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : GetDefaultCurveKeyframes());
 
             baseValues[0].value = (db.m_Damping);
             baseValues[1].value = (db.m_Elasticity);
@@ -251,7 +262,7 @@ namespace DynamicBoneDistributionEditor
             gravity.value = (db.m_Gravity);
             force.value = (db.m_Force);
             endOffset.value = (db.m_EndOffset);
-
+            weight.value = (db.m_Weight);
             freezeAxis.value = (db.m_FreezeAxis);
 
             ApplyAll();
@@ -259,15 +270,15 @@ namespace DynamicBoneDistributionEditor
 
         internal void ReferInitialsToDynamicBone(DynamicBone db)
         {
-            Keyframe[] DE0frames = db?.m_DampingDistrib == null ? getDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : getDefaultCurveKeyframes();
+            Keyframe[] DE0frames = db?.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes();
             distributions[0] = new EditableValue<Keyframe[]>(DE0frames, distributions[0].IsEdited ? distributions[0] : DE0frames);
-            Keyframe[] DE1frames = db?.m_ElasticityDistrib == null ? getDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : getDefaultCurveKeyframes();
+            Keyframe[] DE1frames = db?.m_ElasticityDistrib == null ? GetDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : GetDefaultCurveKeyframes();
             distributions[1] = new EditableValue<Keyframe[]>(DE1frames, distributions[1].IsEdited ? distributions[1] : DE1frames);
-            Keyframe[] DE2frames = db?.m_InertDistrib == null ? getDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : getDefaultCurveKeyframes();
+            Keyframe[] DE2frames = db?.m_InertDistrib == null ? GetDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : GetDefaultCurveKeyframes();
             distributions[2] = new EditableValue<Keyframe[]>(DE2frames, distributions[2].IsEdited ? distributions[2] : DE2frames);
-            Keyframe[] DE3frames = db?.m_RadiusDistrib == null ? getDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : getDefaultCurveKeyframes();
+            Keyframe[] DE3frames = db?.m_RadiusDistrib == null ? GetDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : GetDefaultCurveKeyframes();
             distributions[3] = new EditableValue<Keyframe[]>(DE3frames, distributions[3].IsEdited ? distributions[3] : DE3frames);
-            Keyframe[] DE4frames = db?.m_StiffnessDistrib == null ? getDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : getDefaultCurveKeyframes();
+            Keyframe[] DE4frames = db?.m_StiffnessDistrib == null ? GetDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : GetDefaultCurveKeyframes();
             distributions[4] = new EditableValue<Keyframe[]>(DE4frames, distributions[4].IsEdited ? distributions[4] : DE4frames);
 
             baseValues[0] = new EditableValue<float>(db.m_Damping, baseValues[0].IsEdited ? baseValues[0] : db.m_Damping);
@@ -279,7 +290,7 @@ namespace DynamicBoneDistributionEditor
             gravity = new EditableValue<Vector3>(db.m_Gravity, gravity.IsEdited ? gravity : db.m_Gravity);
             force = new EditableValue<Vector3>(db.m_Force, force.IsEdited ? force : db.m_Force);
             endOffset = new EditableValue<Vector3>(db.m_EndOffset, endOffset.IsEdited ? endOffset : db.m_EndOffset);
-
+            weight = new EditableValue<float>(db.m_Weight, weight.IsEdited ? weight : db.m_Weight);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis, freezeAxis.IsEdited ? freezeAxis : db.m_FreezeAxis);
 
             db.enabled = active;
@@ -287,22 +298,19 @@ namespace DynamicBoneDistributionEditor
             ApplyAll();
         }
 
-        private void LoadVector(byte[] binary, ref EditableValue<Vector3> editableValue)
+        private static void LoadVector(byte[] binary, ref EditableValue<Vector3> editableValue)
         {
-            var sValue = MessagePackSerializer.Deserialize<Vector3>(binary);
-            if (sValue != null)
-            {
-                string s = sValue.ToString("F4");
-                // DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Vector: {s} (As Default = {DBDE.loadSettingsAsDefault.Value})");
-                if (DBDE.loadSettingsAsDefault.Value) editableValue = (EditableValue<Vector3>)sValue;
-                else editableValue.value = sValue;
-            }
+            Vector3 sValue = MessagePackSerializer.Deserialize<Vector3>(binary);
+            var s = sValue.ToString("F4");
+            // DBDE.Logger.LogInfo($"{GetButtonName()} - Loading Vector: {s} (As Default = {DBDE.loadSettingsAsDefault.Value})");
+            if (DBDE.loadSettingsAsDefault.Value) editableValue = (EditableValue<Vector3>)sValue;
+            else editableValue.value = sValue;
         }
 
-        public void SetActive(bool active)
+        public void SetActive(bool newActive)
         {
-            PrimaryDynamicBone.enabled = active;
-            _active = active;
+            PrimaryDynamicBone.enabled = newActive;
+            _active = newActive;
         }
 
 		public AnimationCurve GetAnimationCurve(byte kind)
@@ -365,7 +373,7 @@ namespace DynamicBoneDistributionEditor
             return MessagePackSerializer.Serialize(edits);
         }
 
-		public byte[] Sersialise()
+		public byte[] Serialise()
 		{
             Dictionary<byte, SerialisableKeyframe[]> distribs = distributions
 				.Select((t, i) => new KeyValuePair<byte, EditableValue<Keyframe[]>>((byte)i, t))
@@ -378,17 +386,20 @@ namespace DynamicBoneDistributionEditor
 				.ToDictionary(x => x.Key, x => (float)x.Value);
             byte[] sBaseValues = MessagePackSerializer.Serialize(bValues);
 
-            byte[] sGravtiy = SerialiseEditableVector(gravity);
-            byte[] sFroce = SerialiseEditableVector(force);
+            byte[] sGravity = SerialiseEditableVector(gravity);
+            byte[] sForce = SerialiseEditableVector(force);
             byte[] sEndOffset = SerialiseEditableVector(endOffset);
             byte[] sAxis = null;
+            
             if (freezeAxis.IsEdited)
             {
                 sAxis = MessagePackSerializer.Serialize(((byte?)freezeAxis.value));
             }
             byte[] sActive = MessagePackSerializer.Serialize(active);
 
-            List<byte[]> edits = new List<byte[]>() {sDistrib, sBaseValues, sGravtiy, sFroce, sEndOffset, sAxis, sActive };
+            byte[] sWeight = MessagePackSerializer.Serialize(weight.value);
+            
+            var edits = new List<byte[]>() {sDistrib, sBaseValues, sGravity, sForce, sEndOffset, sAxis, sActive, sWeight };
             return MessagePackSerializer.Serialize(edits);
 		}
 
@@ -465,14 +476,17 @@ namespace DynamicBoneDistributionEditor
 
         public bool IsEdited(int kind)
         {
-            if (distributions[kind].IsEdited) return true;
-            if (baseValues[kind].IsEdited) return true;
-            return false;
+            return distributions[kind].IsEdited || baseValues[kind].IsEdited;
         }
 
         public bool isActiveEdited()
         {
             return initalActive != active;
+        }
+
+        public bool isWeigthEdited()
+        {
+            return weight.IsEdited;
         }
 
 		public bool IsEdited()
@@ -490,6 +504,7 @@ namespace DynamicBoneDistributionEditor
             if (endOffset.IsEdited) return true;
             if (freezeAxis.IsEdited) return true;
             if (initalActive != active) return true;
+            if (weight.IsEdited) return true;
 			return false;
 		}
 
@@ -498,13 +513,11 @@ namespace DynamicBoneDistributionEditor
             List<DynamicBone> DBS = DynamicBones;
             if (DBS.IsNullOrEmpty()) return;
             if (active && DBS.FindAll(b => b.enabled == true).Count() == 1) return;
-            if (DBS.Count > 1 || always)
+            if (DBS.Count <= 1 && !always) return;
+            foreach (DynamicBone db in DBS) db.enabled = false; //disable others
+            if (active)
             {
-                foreach (DynamicBone db in DBS) db.enabled = false; //disable others
-                if (active)
-                {
-                    PrimaryDynamicBone.enabled = true; // enable primary
-                }
+                PrimaryDynamicBone.enabled = true; // enable primary
             }
         }
 
@@ -518,6 +531,7 @@ namespace DynamicBoneDistributionEditor
             ApplyForce();
             ApplyEndOffset();
             ApplyFreezeAxis();
+            ApplyWeight();
             // does this create issues?
             SetActive(active);
         }
@@ -530,46 +544,46 @@ namespace DynamicBoneDistributionEditor
             ResetForce();
             ResetEndOffset();
             ResetFreezeAxis();
+            ResetWeight();
             SetActive(initalActive);
         }
 
 		public void ApplyDistribution(int? kind = null)
-		{
-            for (int i = 0; i < DynamicBones.Count; i++)
+        {
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
-                if (db == null) return;
-			    if (kind.HasValue)
-			    {
-				    Keyframe[] keys = distributions[kind.Value];
-				    switch (kind.Value)
-				    {
-					    case 0:
-						    if (db.m_DampingDistrib == null) db.m_DampingDistrib = new AnimationCurve(keys);
-						    else db.m_DampingDistrib.SetKeys(keys);
-						    break;
-					    case 1:
+                if (!db) return;
+                if (kind.HasValue)
+                {
+                    Keyframe[] keys = distributions[kind.Value];
+                    switch (kind.Value)
+                    {
+                        case 0:
+                            if (db.m_DampingDistrib == null) db.m_DampingDistrib = new AnimationCurve(keys);
+                            else db.m_DampingDistrib.SetKeys(keys);
+                            break;
+                        case 1:
                             if (db.m_ElasticityDistrib == null) db.m_ElasticityDistrib = new AnimationCurve(keys);
                             else db.m_ElasticityDistrib.SetKeys(keys);
                             break;
-					    case 2:
+                        case 2:
                             if (db.m_InertDistrib == null) db.m_InertDistrib = new AnimationCurve(keys);
                             else db.m_InertDistrib.SetKeys(keys);
                             break;
-					    case 3:
+                        case 3:
                             if (db.m_RadiusDistrib == null) db.m_RadiusDistrib = new AnimationCurve(keys);
                             else db.m_RadiusDistrib.SetKeys(keys);
                             break;
-					    case 4:
+                        case 4:
                             if (db.m_StiffnessDistrib == null) db.m_StiffnessDistrib = new AnimationCurve(keys);
                             else db.m_StiffnessDistrib.SetKeys(keys);
                             break;
                     }
-			    }
-			    else
-			    {
-				    if (db.m_DampingDistrib == null) db.m_DampingDistrib = new AnimationCurve(distributions[0]);
-				    else db.m_DampingDistrib.SetKeys(distributions[0]);
+                }
+                else
+                {
+                    if (db.m_DampingDistrib == null) db.m_DampingDistrib = new AnimationCurve(distributions[0]);
+                    else db.m_DampingDistrib.SetKeys(distributions[0]);
                     if (db.m_ElasticityDistrib == null) db.m_ElasticityDistrib = new AnimationCurve(distributions[1]);
                     else db.m_ElasticityDistrib.SetKeys(distributions[1]);
                     if (db.m_InertDistrib == null) db.m_InertDistrib = new AnimationCurve(distributions[2]);
@@ -581,16 +595,15 @@ namespace DynamicBoneDistributionEditor
                 }
                 db.UpdateParticles();
             }
-            UpdateActiveStack();
 
+            UpdateActiveStack();
         }
 
         public void ResetDistribution(int? kind = null)
         {
-            for (int j = 0; j < DynamicBones.Count; j++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[j];
-                if (db == null) return;
+                if (!db) return;
                 if (kind.HasValue)
                 {
                     distributions[kind.Value].Reset();
@@ -625,15 +638,15 @@ namespace DynamicBoneDistributionEditor
                 }
                 db.UpdateParticles();
             }
+
             UpdateActiveStack();
         }
 
         public void ApplyBaseValues(int? kind = null)
         {
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
-                if (db == null) return;
+                if (!db) return;
                 if (kind.HasValue)
                 {
                     float value = baseValues[kind.Value];
@@ -666,15 +679,15 @@ namespace DynamicBoneDistributionEditor
                 }
                 db.UpdateParticles();
             }
+
             UpdateActiveStack();
         }
 
         public void ResetBaseValues(int? kind = null)
-		{
-            for (int j = 0; j < DynamicBones.Count; j++)
+        {
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[j];
-                if (db == null) return;
+                if (!db) return;
                 if (kind.HasValue)
                 {
                     baseValues[kind.Value].Reset();
@@ -713,62 +726,60 @@ namespace DynamicBoneDistributionEditor
                 }
                 db.UpdateParticles();
             }
+
             UpdateActiveStack();
         }
 
         public void ApplyGravity()
         {
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_Gravity = gravity;
             }
+
             UpdateActiveStack();
         }
         public void ResetGravity()
         {
             gravity.Reset();
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_Gravity = gravity;
             }
             UpdateActiveStack();
         }
         public void ApplyForce()
         {
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_Force = force;
             }
+
             UpdateActiveStack();
         }
         public void ResetForce()
         {
             force.Reset();
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_Force = force;
             }
             UpdateActiveStack();
         }
         public void ApplyFreezeAxis()
         {
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_FreezeAxis = freezeAxis;
             }
+
             UpdateActiveStack();
         }
         public void ResetFreezeAxis()
         {
             freezeAxis.Reset();
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_FreezeAxis = freezeAxis;
             }
             UpdateActiveStack();
@@ -776,21 +787,41 @@ namespace DynamicBoneDistributionEditor
 
         public void ApplyEndOffset()
         {
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_EndOffset = endOffset;
                 db.UpdateParticles();
             }
+
             UpdateActiveStack();
         }
         public void ResetEndOffset()
         {
             endOffset.Reset();
-            for (int i = 0; i < DynamicBones.Count; i++)
+            foreach (DynamicBone db in DynamicBones)
             {
-                DynamicBone db = DynamicBones[i];
                 db.m_EndOffset = endOffset;
+                db.UpdateParticles();
+            }
+            UpdateActiveStack();
+        }
+
+        public void ApplyWeight()
+        {
+            foreach (DynamicBone db in DynamicBones)
+            {
+                db.m_Weight = weight;
+                db.UpdateParticles();
+            }
+            UpdateActiveStack();
+        }
+        
+        public void ResetWeight()
+        {
+            weight.Reset();
+            foreach (DynamicBone db in DynamicBones)
+            {
+                db.m_Weight = weight;
                 db.UpdateParticles();
             }
             UpdateActiveStack();
