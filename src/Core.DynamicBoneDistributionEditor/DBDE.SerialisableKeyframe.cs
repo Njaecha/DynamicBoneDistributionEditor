@@ -4,7 +4,7 @@ using MessagePack;
 namespace DynamicBoneDistributionEditor
 {
     [MessagePackObject(keyAsPropertyName: true)]
-    internal class SerialisableKeyframe
+    public class SerialisableKeyframe
     {
         [Key("Time")]
         public float time;
