@@ -16,12 +16,12 @@ namespace DynamicBoneDistributionEditor
 	{
 		/// <summary>
         /// Distribution Curves
-		/// 0 - Dampening, 1 - Elasticity, 2 - Intertia, 3 - Radius, 4 - Stiffness
+		/// 0 - Dampening, 1 - Elasticity, 2 - Inertia, 3 - Radius, 4 - Stiffness
 		/// </summary>
         public readonly EditableValue<Keyframe[]>[] distributions;
         /// <summary>
         /// Base Values
-		/// 0 - Dampening, 1 - Elasticity, 2 - Intertia, 3 - Radius, 4 - Stiffness
+		/// 0 - Dampening, 1 - Elasticity, 2 - Inertia, 3 - Radius, 4 - Stiffness
 		/// </summary>
         public readonly EditableValue<float>[] baseValues;
         
