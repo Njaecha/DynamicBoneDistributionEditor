@@ -31,6 +31,12 @@ namespace DynamicBoneDistributionEditor
         public EditableValue<DynamicBone.FreezeAxis> freezeAxis;
         
         public EditableValue<float> weight;
+        
+        // uneditable values that are only required for Multi-Bone fix
+        private readonly List<Transform> _notRolls;
+        private readonly Vector3 _localGravity;
+        private readonly List<DynamicBoneCollider> _colliders;
+        private readonly List<DynamicBone.Particle> _particles;
 
         private bool initalActive;
         private bool _active;
@@ -39,7 +45,7 @@ namespace DynamicBoneDistributionEditor
         private DynamicBone _primary;
         public DynamicBone PrimaryDynamicBone { get {
                 List<DynamicBone> dbs = DynamicBones;
-                if (!_primary || dbs.Contains(_primary))
+                if (!_primary || !dbs.Contains(_primary))
                 {
                     _primary = dbs.FirstOrDefault();
                 } 
@@ -99,15 +105,22 @@ namespace DynamicBoneDistributionEditor
                 DBDE.Logger.LogError("Creating DBDEDynamicBoneEdit failed, Accessor returned zero Dynamic Bones!");
                 return;
             }
-
+            
             initalActive = _active = dbs.Any(b => b.enabled);
+            
+            // values for multi bone fix
+            _notRolls = db.m_notRolls;
+            _colliders = db.m_Colliders;
+            _localGravity = db.m_LocalGravity;
+            _particles = db.m_Particles;
+            
             this.distributions = new EditableValue<Keyframe[]>[]
             {
-                new EditableValue<Keyframe[]>(db?.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_ElasticityDistrib == null ? GetDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : GetDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_InertDistrib == null ? GetDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : GetDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_RadiusDistrib == null ? GetDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : GetDefaultCurveKeyframes()),
-                new EditableValue<Keyframe[]>(db?.m_StiffnessDistrib == null ? GetDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : GetDefaultCurveKeyframes())
+                new EditableValue<Keyframe[]>(db.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db.m_ElasticityDistrib == null ? GetDefaultCurveKeyframes() : db.m_ElasticityDistrib.keys.Length >= 2 ? db.m_ElasticityDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db.m_InertDistrib == null ? GetDefaultCurveKeyframes() : db.m_InertDistrib.keys.Length >= 2 ? db.m_InertDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db.m_RadiusDistrib == null ? GetDefaultCurveKeyframes() : db.m_RadiusDistrib.keys.Length >= 2 ? db.m_RadiusDistrib.keys : GetDefaultCurveKeyframes()),
+                new EditableValue<Keyframe[]>(db.m_StiffnessDistrib == null ? GetDefaultCurveKeyframes() : db.m_StiffnessDistrib.keys.Length >= 2 ? db.m_StiffnessDistrib.keys : GetDefaultCurveKeyframes())
             };
             this.baseValues = new EditableValue<float>[]
             {
@@ -123,7 +136,8 @@ namespace DynamicBoneDistributionEditor
             endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
             weight = new EditableValue<float>(db.m_Weight);
-            
+
+            MultiBoneFix();
             PasteData(copyFrom);
         }
 
@@ -139,6 +153,13 @@ namespace DynamicBoneDistributionEditor
             }
 
             initalActive = _active = dbs.Any(b => b.enabled);
+            
+            // values for multi bone fix
+            _notRolls = db.m_notRolls;
+            _colliders = db.m_Colliders;
+            _localGravity = db.m_LocalGravity;
+            _particles = db.m_Particles;
+            
             this.distributions = new EditableValue<Keyframe[]>[]
 			{
 				new EditableValue<Keyframe[]>(db.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes()),
@@ -233,6 +254,9 @@ namespace DynamicBoneDistributionEditor
                 if (DBDEWeight.HasValue) weight.value = DBDEWeight.Value;
                 else if (DBE != null && DBE.Weight.HasValue) weight.value = DBE.Weight.Value;
             }
+            
+            MultiBoneFix();
+            ApplyAll();
         }
 
         internal void ReferToDynamicBone()
@@ -294,7 +318,7 @@ namespace DynamicBoneDistributionEditor
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis, freezeAxis.IsEdited ? freezeAxis : db.m_FreezeAxis);
 
             db.enabled = active;
-
+            
             ApplyAll();
         }
 
@@ -520,11 +544,32 @@ namespace DynamicBoneDistributionEditor
                 PrimaryDynamicBone.enabled = true; // enable primary
             }
         }
+        /// <summary>
+        /// Copies the unchangeable values from the PrimaryDynamicBone to the other DynamicBone components
+        /// </summary>
+        internal void MultiBoneFix()
+        {
+            if (DynamicBones.IsNullOrEmpty() || DynamicBones.Count < 2) return;
+            foreach (DynamicBone db in DynamicBones)
+            {
+                db.m_notRolls = _notRolls;
+                db.m_Particles = _particles;
+                db.m_Colliders = _colliders;
+                // I hate this but if I don't delay setting the LocalGravity it gets overwritten right again
+                DBDE.Instance.StartCoroutine(ShitHead(db)); 
+            }
+        }
+
+        private IEnumerator ShitHead(DynamicBone db)
+        {
+            yield return null;
+            db.m_LocalGravity = _localGravity;
+            //DBDE.Logger.LogDebug($"Fixed {db.name}, bone count: {db.m_Particles.Count}, gravity: {db.m_LocalGravity.x:0.000}, {db.m_LocalGravity.y:0.000}, {db.m_LocalGravity.z:0.000}");
+        }
 
         public void ApplyAll()
         {
-            _ = PrimaryDynamicBone; // make sure PrimaryDynmicBone is always obtained
-
+            _ = PrimaryDynamicBone; // make sure PrimaryDynamicBone is always obtained
             ApplyDistribution();
             ApplyBaseValues();
             ApplyGravity();
@@ -552,7 +597,7 @@ namespace DynamicBoneDistributionEditor
         {
             foreach (DynamicBone db in DynamicBones)
             {
-                if (!db) return;
+                if (!db) continue;
                 if (kind.HasValue)
                 {
                     Keyframe[] keys = distributions[kind.Value];

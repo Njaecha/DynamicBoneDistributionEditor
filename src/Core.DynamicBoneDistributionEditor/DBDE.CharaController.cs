@@ -38,18 +38,26 @@ namespace DynamicBoneDistributionEditor
 
         private void setIsLoading(bool value)
         {
-            if (value && !_isLoading) StartCoroutine(endLoading());
+            if (value && !_isLoading) StartCoroutine(endLoading(LoadIgnoreFrameCount));
             _isLoading = value;
         }
 
-        private IEnumerator endLoading()
+        private IEnumerator endLoading(int frameCount)
         {
-            for (int i = 0; i < LoadIgnoreFrameCount; i++)
+            for (int i = 0; i < frameCount; i++)
             {
-                DBDE.Logger.LogDebug($"DBDE Waiting for load to finish -> Frame {i + 1}/{LoadIgnoreFrameCount}");
+                DBDE.Logger.LogDebug($"DBDE Waiting for load to finish -> Frame {i + 1}/{frameCount}");
                 yield return null;
             }
             IsLoading = false;
+        }
+
+        protected override void Awake()
+        {
+            LoadIgnoreFrameCount = MakerAPI.InsideMaker ? 5 : 2;
+            IsLoading = true;
+            LoadIgnoreFrameCount = 3;
+            base.Awake();
         }
 
         protected override void OnReload(GameMode currentGameMode, bool maintainState)
@@ -90,7 +98,7 @@ namespace DynamicBoneDistributionEditor
         protected override void OnCardBeingSaved(GameMode currentGameMode)
         {
             PluginData data = new PluginData();
-            RefreshBoneList();
+            RefreshBoneList("Card Being Saved");
 
             Dictionary<int, List<KeyValuePair<KeyValuePair<int, string>, byte[]>>> ACC = new Dictionary<int, List<KeyValuePair<KeyValuePair<int, string>, byte[]>>>();
             Dictionary<int, List<KeyValuePair<string, byte[]>>> NORM = new Dictionary<int, List<KeyValuePair<string, byte[]>>>();
@@ -317,7 +325,7 @@ namespace DynamicBoneDistributionEditor
         protected override void OnCoordinateBeingSaved(ChaFileCoordinate coordinate)
         {
             PluginData data = new PluginData();
-            RefreshBoneList();
+            RefreshBoneList("Coordinate Being Saved");
             // serialise edits list for current coordinate
             List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits = new List<KeyValuePair<KeyValuePair<int, string>, byte[]>>();
             List<KeyValuePair<string, byte[]>> normalEdits = new List<KeyValuePair<string, byte[]>>();
@@ -375,7 +383,7 @@ namespace DynamicBoneDistributionEditor
             DBDE.UI.UpdateUIWhileOpen = false;
             
             DynamicBoneCache.Clear();
-            RefreshBoneList();
+            RefreshBoneList($"Clothes Changed (clothing part: {clothGO.name})");
 
             List<DynamicBone> clothDBs = clothGO.GetComponentsInChildren<DynamicBone>(true).ToList();
 
@@ -411,10 +419,12 @@ namespace DynamicBoneDistributionEditor
                 yield return null;
             }
             DBDE.Logger.LogDebug($"Applying Data for outfit {ChaControl.fileStatus.coordinateType} on character {ChaControl.chaFile.GetFancyCharacterName()} (from Delayed)");
-            RefreshBoneList();
+            RefreshBoneList("From ApplyCurrent Delayed (see above)");
             for (int i = 0; i < DistributionEdits[ChaControl.fileStatus.coordinateType].Count; i++)
             {
-                DistributionEdits[ChaControl.fileStatus.coordinateType][i].ApplyAll();
+                DBDEDynamicBoneEdit edit = DistributionEdits[ChaControl.fileStatus.coordinateType][i];
+                edit.MultiBoneFix();
+                edit.ApplyAll();
             }
             DBDE.UI.UpdateUIWhileOpen = true;
         }
@@ -505,13 +515,14 @@ namespace DynamicBoneDistributionEditor
         internal void AccessoryChangedEvent(int slot)
         {
             DynamicBoneCache.Clear();
-            RefreshBoneList();
+            RefreshBoneList("Accessory Changed");
             if (DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType))
             {
                 foreach (var edit in DistributionEdits[ChaControl.fileStatus.coordinateType])
                 {
-                    edit.ApplyAll();
                     edit.UpdateActiveStack(true);
+                    //edit.MultiBoneFix();
+                    edit.ApplyAll();
                 }
             }
         }
@@ -538,6 +549,7 @@ namespace DynamicBoneDistributionEditor
                 DBDEDynamicBoneEdit sourceEdit = DistributionEdits[ChaControl.fileStatus.coordinateType].Find(dbde => dbde.ReidentificationData is KeyValuePair<int, string> kvp && kvp.Key == source && kvp.Value == name);
                 // add new DBDE Data for DynamicBone on the destitination accessory, whilees; copying the DBDE data. 
                 DistributionEdits[ChaControl.fileStatus.coordinateType].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(name, newSlot), sourceEdit) { ReidentificationData = new KeyValuePair<int, string>(newSlot, name) });
+                sourceEdit.MultiBoneFix();
                 sourceEdit.ApplyAll();
             }
             StartCoroutine(RefreshBoneListDelayed());
@@ -572,8 +584,8 @@ namespace DynamicBoneDistributionEditor
 
         public void OpenDBDE()
         {
-            RefreshBoneList();
-            DBDE.UI.Open(() => DistributionEdits[ChaControl.fileStatus.coordinateType], () => RefreshBoneList());
+            RefreshBoneList("UI Open");
+            DBDE.UI.Open(() => DistributionEdits[ChaControl.fileStatus.coordinateType], () => RefreshBoneList("UI Button"));
             DBDE.UI.TitleAppendix = ChaControl.chaFile.GetFancyCharacterName();
             DBDE.UI.referencedChara = this;
         }
@@ -581,16 +593,16 @@ namespace DynamicBoneDistributionEditor
         public IEnumerator RefreshBoneListDelayed()
         {
             yield return null;
-            RefreshBoneList();
+            RefreshBoneList("From Delayed");
         }
 
-        private void RefreshBoneList(bool removeDeadOnes = true)
+        private void RefreshBoneList(string callSource, bool removeDeadOnes = true)
         {
             if (IsLoading) return;
 
             int outfit = ChaControl.fileStatus.coordinateType;
 
-            DBDE.Logger.LogDebug($"Refreshing Bone List on {ChaControl.chaFile.GetFancyCharacterName()} - Outfit {outfit} | removeDead {removeDeadOnes}");
+            DBDE.Logger.LogDebug($"Refreshing Bone List on {ChaControl.chaFile.GetFancyCharacterName()} - Outfit {outfit} | removeDead {removeDeadOnes} | callSource {callSource}");
 
             if (!DistributionEdits.ContainsKey(outfit))
             {
