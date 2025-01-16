@@ -38,29 +38,43 @@ namespace DynamicBoneDistributionEditor
             GL.PushMatrix();
             GL.MultMatrix(Matrix4x4.identity);
 
-            GL.Begin( GL.LINE_STRIP );
-            GL.Color(Color.magenta);
-            Transform leaf = traverseBones(Editing.PrimaryDynamicBone.m_Root.transform);
-            GL.End();
+            List<Transform> leafs = TraverseBone(Editing.PrimaryDynamicBone);
 
-            Vector3 gTip = drawArrow(leaf.position, Editing.gravity.value, Color.blue, 50);
-            Vector3 fTip = drawArrow(gTip, Editing.force.value, Color.red, 50);
-            drawArrow(leaf.position, fTip - leaf.position, Color.green, 1);
+            foreach (Transform leaf in leafs)
+            {
+                Vector3 gTip = DrawArrow(leaf.position, Editing.gravity.value, Color.blue, 40);
+                Vector3 fTip = DrawArrow(gTip, Editing.force.value, Color.red, 40);
+                DrawArrow(leaf.position, fTip - leaf.position, Color.green, 1);
+            }
 
             GL.PopMatrix();
         }
 
-        private Transform traverseBones(Transform transform)
+        private static List<Transform> TraverseBone(DynamicBone db)
         {
-            GL.Vertex(transform.position);
-            if (transform.childCount > 0)
+            List<Transform> particles = db.m_Particles.Select(p => p.m_Transform).ToList();
+            var thingies = new List<Transform> { db.m_Root.transform };
+            thingies.AddRange(particles);
+            thingies.AddRange(db.m_notRolls);
+            thingies.AddRange(db.m_Exclusions);
+            
+            List<Transform> leafs = new List<Transform>();
+            foreach (Transform transform in thingies)
             {
-                return traverseBones(transform.GetChild(0));
+                if (!transform || !transform.parent) continue;
+                Color color = particles.Contains(transform.parent) ? Color.magenta : Color.gray;
+                //DrawPyramid(color, transform.position, transform.parent.position, 0.1f);
+                DrawPyramid(color, transform);
+
+                if (transform.childCount != 0) continue;
+                DrawPyramid(new Color(0.4f, 0.1f, 0.5f), transform.position + transform.forward.normalized * 0.01f, transform.position, 0.1f);
+                DrawPyramid(new Color(0.4f, 0.1f, 0.5f), transform.position + -transform.forward.normalized * 0.01f, transform.position, 0.1f);
+                leafs.Add(transform);
             }
-            else return transform;
+            return leafs;
         }
 
-        private Vector3 drawArrow(Vector3 Base, Vector3 relativeTip, Color color, int factor)
+        private static Vector3 DrawArrow(Vector3 Base, Vector3 relativeTip, Color color, int factor)
         {
             GL.Begin (GL.LINES);
             GL.Color(color);
@@ -68,9 +82,36 @@ namespace DynamicBoneDistributionEditor
             Vector3 tip = Base + relativeTip * factor;
             GL.Vertex(tip);
             GL.End ();
+            DrawPyramid(color, tip, Base + relativeTip * (factor * 0.8f), 0.05f);
+            return tip;
+        }
+
+
+        private static void DrawPyramid(Color color, Transform transform, float radius = 0.1f)
+        {
             GL.Begin(GL.TRIANGLES);
             GL.Color(color);
-            List<Vector3> cornerpoints = CalculateBasePoints(tip, Base + relativeTip * (factor * 0.8f));
+            List<Vector3> cornerPoints = CalculateBasePoints(transform.position, transform.parent.position, radius, transform.parent.position + transform.parent.right);
+            GL.Vertex(transform.position);
+            GL.Vertex(cornerPoints[0]);
+            GL.Vertex(cornerPoints[1]);
+            GL.Vertex(transform.position);
+            GL.Vertex(cornerPoints[1]);
+            GL.Vertex(cornerPoints[2]); 
+            GL.Vertex(transform.position);
+            GL.Vertex(cornerPoints[2]);
+            GL.Vertex(cornerPoints[3]);
+            GL.Vertex(transform.position);
+            GL.Vertex(cornerPoints[3]);
+            GL.Vertex(cornerPoints[0]);
+            GL.End();
+        }
+        
+        private static void DrawPyramid( Color color, Vector3 tip, Vector3 baseCenter, float radius = 0.35f)
+        {
+            GL.Begin(GL.TRIANGLES);
+            GL.Color(color);
+            List<Vector3> cornerpoints = CalculateBasePoints(tip, baseCenter, radius);
             GL.Vertex(tip);
             GL.Vertex(cornerpoints[0]);
             GL.Vertex(cornerpoints[1]);
@@ -84,14 +125,21 @@ namespace DynamicBoneDistributionEditor
             GL.Vertex(cornerpoints[3]);
             GL.Vertex(cornerpoints[0]);
             GL.End();
-            return tip;
         }
 
         // AI generated :)
-        private List<Vector3> CalculateBasePoints(Vector3 tip, Vector3 baseCenter)
+        private static List<Vector3> CalculateBasePoints(Vector3 tip, Vector3 baseCenter, float radius, Vector3? cornerPoint = null)
         {
             Vector3 c = tip - baseCenter;
-            Vector3 pA = Vector3.Cross(Vector3.forward, c)*0.35f;
+            Vector3 pA;
+            if (cornerPoint.HasValue)
+            {
+                pA = ((cornerPoint.Value - baseCenter) * (radius/10));
+            }
+            else
+            {
+                pA = Vector3.Cross(Vector3.forward, c).normalized*(radius/10);
+            }
             Vector3 pB = Quaternion.AngleAxis(90, c) * pA;
             Vector3 pC = Quaternion.AngleAxis(180, c) * pA;
             Vector3 pD = Quaternion.AngleAxis(270, c) * pA;

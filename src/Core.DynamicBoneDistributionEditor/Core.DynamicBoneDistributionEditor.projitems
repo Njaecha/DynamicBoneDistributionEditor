@@ -19,6 +19,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.SerialisableKeyframe.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DBDE.UI.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)DynamicBoneEditor.Data.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)EditableList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)EditableValue.cs" />
   </ItemGroup>
 </Project>

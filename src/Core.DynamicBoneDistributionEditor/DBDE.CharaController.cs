@@ -382,7 +382,7 @@ namespace DynamicBoneDistributionEditor
             if (IsLoading) return;
             DBDE.UI.UpdateUIWhileOpen = false;
             
-            DynamicBoneCache.Clear();
+            _dynamicBoneCache.Clear();
             RefreshBoneList($"Clothes Changed (clothing part: {clothGO.name})");
 
             List<DynamicBone> clothDBs = clothGO.GetComponentsInChildren<DynamicBone>(true).ToList();
@@ -514,7 +514,7 @@ namespace DynamicBoneDistributionEditor
 
         internal void AccessoryChangedEvent(int slot)
         {
-            DynamicBoneCache.Clear();
+            _dynamicBoneCache.Clear();
             RefreshBoneList("Accessory Changed");
             if (DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType))
             {
@@ -696,7 +696,7 @@ namespace DynamicBoneDistributionEditor
                 }
                 else
                 {
-                    if (a.DynamicBones.Any(d => d == null)) DynamicBoneCache.Clear(); // dead bone stuck in cache
+                    if (a.DynamicBones.Any(d => d == null)) _dynamicBoneCache.Clear(); // dead bone stuck in cache
                 }
                 return false;
             });
@@ -719,22 +719,24 @@ namespace DynamicBoneDistributionEditor
 
         }
 
-        private Dictionary<int, Dictionary<string, List<DynamicBone>>> DynamicBoneCache = new Dictionary<int, Dictionary<string, List<DynamicBone>>>();
+        private readonly Dictionary<int, Dictionary<string, List<DynamicBone>>> _dynamicBoneCache = new Dictionary<int, Dictionary<string, List<DynamicBone>>>();
 
-        private List<DynamicBone> WouldYouBeSoKindTohandMeTheDynamicBonePlease(string name, int? slot = null)
+        private List<DynamicBone> WouldYouBeSoKindTohandMeTheDynamicBonePlease(string identificationName, int? slot = null)
         {
-            if (DynamicBoneCache.TryGetValue(slot ?? -1, out var a) && a.TryGetValue(name, out var dBones) && !dBones.IsNullOrEmpty() && !dBones.Any(d =>  d == null || d.m_Root == null)) return dBones;
+            if (identificationName.StartsWith("/")) identificationName = identificationName.Remove(0, 1);
+            
+            if (_dynamicBoneCache.TryGetValue(slot ?? -1, out Dictionary<string, List<DynamicBone>> a) && a.TryGetValue(identificationName, out List<DynamicBone> dBones) && !dBones.IsNullOrEmpty() && !dBones.Any(d =>  !d || !d.m_Root)) return dBones;
 
-            List<DynamicBone> searchList = new List<DynamicBone>();
+            List<DynamicBone> searchList;
             if (slot.HasValue) searchList = ChaControl.GetAccessoryComponent(slot.Value)?.GetComponentsInChildren<DynamicBone>(true)?
-                    .Where(db => db.m_Root != null && db.TryGetAccessoryQualifiedName(out string n) && n == name)
+                    .Where(db => db.m_Root && db.TryGetAccessoryQualifiedName(out string n) && n == identificationName)
                     .Select(db => new KeyValuePair<string, DynamicBone>(db.gameObject.name, db))
                     .GroupBy(pair => pair.Key)
                     .Select(group => group.First().Value)
                     .ToList();
 
             else searchList = ChaControl.GetComponentsInChildren<DynamicBone>(true)?
-                    .Where(db => db.m_Root != null && !db.TryGetAccessoryQualifiedName(out _) && db.TryGetChaControlQualifiedName(out string n) && n == name)
+                    .Where(db => db.m_Root && !db.TryGetAccessoryQualifiedName(out _) && db.TryGetChaControlQualifiedName(out string n) && n == identificationName)
                     .Select(db => new KeyValuePair<string, DynamicBone>(db.gameObject.name, db))
                     .GroupBy(pair => pair.Key)
                     .Select(group => group.First().Value)
@@ -742,8 +744,8 @@ namespace DynamicBoneDistributionEditor
 
             if (searchList.IsNullOrEmpty()) return null;
             
-            if (!DynamicBoneCache.ContainsKey(slot ?? -1)) DynamicBoneCache[slot ?? -1] = new Dictionary<string, List<DynamicBone>>();
-            DynamicBoneCache[slot ?? -1][name] = searchList;
+            if (!_dynamicBoneCache.ContainsKey(slot ?? -1)) _dynamicBoneCache[slot ?? -1] = new Dictionary<string, List<DynamicBone>>();
+            _dynamicBoneCache[slot ?? -1][identificationName] = searchList;
 
             return searchList;
         }

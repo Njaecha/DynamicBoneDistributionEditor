@@ -6,6 +6,7 @@ using UnityEngine;
 using MessagePack;
 using KKAPI.Utilities;
 using DBDE.KK_Plugins.DynamicBoneEditor;
+using KK.DynamicBoneDistributionEditor;
 using UniRx;
 using KKAPI.Maker;
 using static AnimationCurveEditor.AnimationCurveEditor.KeyframeEditedArgs;
@@ -31,14 +32,53 @@ namespace DynamicBoneDistributionEditor
         public EditableValue<DynamicBone.FreezeAxis> freezeAxis;
         
         public EditableValue<float> weight;
+
+        /// <summary>
+        /// List of strings that correspond to the transforms in m_notRolls
+        /// </summary>
+        internal EditableList<string> notRolls;
+        public List<Transform> NotRollsTransforms
+        {
+            get
+            {
+                return notRolls.Select(bone => PrimaryDynamicBone.m_Root.Find(bone)).Where(t => t).ToList();
+            }
+        }
+        /// <summary>
+        /// List of strings that correspond to the transforms in m_Exclusions
+        /// </summary>
+        internal EditableList<string> Exclusions;
+        public List<Transform> ExclusionsTransforms
+        {
+            get
+            {
+                return Exclusions.Select(t => PrimaryDynamicBone.m_Root.Find(t)).Where(t => t).ToList();
+            }
+        }
         
-        // uneditable values that are only required for Multi-Bone fix
-        private readonly List<Transform> _notRolls;
+
+        private List<Transform> BoneChainTransforms
+        {
+            get
+            {
+                var chainTransforms = new List<Transform> { PrimaryDynamicBone.m_Root };
+                Transform child = PrimaryDynamicBone.m_Root.GetChild(0);
+                while (child.childCount > 0)
+                {
+                    chainTransforms.Add(child);
+                    child = child.GetChild(0);
+                }
+                return chainTransforms;
+            }
+        }
+        
+        
+        // un-editable values that are only required for Multi-Bone fix
         private readonly Vector3 _localGravity;
         private readonly List<DynamicBoneCollider> _colliders;
         private readonly List<DynamicBone.Particle> _particles;
 
-        private bool initalActive;
+        private bool _initialActive;
         private bool _active;
         public bool active {get => _active; set => SetActive(value); }
 
@@ -91,8 +131,19 @@ namespace DynamicBoneDistributionEditor
 
             this.SetActive(copyFrom.active);
             this.weight = copyFrom.weight;
-
             ApplyAll();
+
+            if (copyFrom.notRolls.Count > 0)
+            {
+                this.notRolls = new EditableList<string>(copyFrom.notRolls);
+                ApplyNotRollsAndExclusions();
+            }
+
+            if (copyFrom.Exclusions.Count > 0)
+            {
+                this.Exclusions = new EditableList<string>(copyFrom.Exclusions);
+                ApplyNotRollsAndExclusions();
+            }
         }
 
 		public DBDEDynamicBoneEdit(Func<List<DynamicBone>> accessorFunction, DBDEDynamicBoneEdit copyFrom)
@@ -106,10 +157,9 @@ namespace DynamicBoneDistributionEditor
                 return;
             }
             
-            initalActive = _active = dbs.Any(b => b.enabled);
+            _initialActive = _active = dbs.Any(b => b.enabled);
             
             // values for multi bone fix
-            _notRolls = db.m_notRolls;
             _colliders = db.m_Colliders;
             _localGravity = db.m_LocalGravity;
             _particles = db.m_Particles;
@@ -136,6 +186,8 @@ namespace DynamicBoneDistributionEditor
             endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
             weight = new EditableValue<float>(db.m_Weight);
+            notRolls = new EditableList<string>(db.m_notRolls.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty()));
+            Exclusions = new EditableList<string>(db.m_Exclusions.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty()));
 
             MultiBoneFix();
             PasteData(copyFrom);
@@ -152,10 +204,9 @@ namespace DynamicBoneDistributionEditor
                 return;
             }
 
-            initalActive = _active = dbs.Any(b => b.enabled);
+            _initialActive = _active = dbs.Any(b => b.enabled);
             
             // values for multi bone fix
-            _notRolls = db.m_notRolls;
             _colliders = db.m_Colliders;
             _localGravity = db.m_LocalGravity;
             _particles = db.m_Particles;
@@ -182,7 +233,11 @@ namespace DynamicBoneDistributionEditor
             endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
             weight = new EditableValue<float>(db.m_Weight);
+            notRolls = new EditableList<string>(db.m_notRolls.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty()));
+            Exclusions = new EditableList<string>(db.m_Exclusions.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty()));
 
+            var notRollsEcxlusionsLoaded = false;
+            
 			if (serialised != null) // set DBDE specific values
 			{
                 //DBDE.Logger.LogInfo($"Deserialising {db.m_Root.name}");
@@ -204,6 +259,24 @@ namespace DynamicBoneDistributionEditor
                 //DBDE.Logger.LogInfo($"{GetButtonName()} - Loading EndOffset");
                 if (!edits[4].IsNullOrEmpty()) LoadVector(edits[4], ref endOffset);
                 SetActive(MessagePackSerializer.Deserialize<bool>(edits[6]));
+
+                // TODO: implement deserialization of notRolls and Exclusions
+                if (edits.Count > 9)
+                {
+                    if (!edits[8].IsNullOrEmpty())
+                    {
+                        var nr = MessagePackSerializer.Deserialize<List<string>>(edits[8]);
+                        if (!nr.IsNullOrEmpty()) notRolls = new EditableList<string>(nr);
+                        notRollsEcxlusionsLoaded = true;
+                    }
+
+                    if (!edits[9].IsNullOrEmpty())
+                    {
+                        var exc = MessagePackSerializer.Deserialize<List<string>>(edits[9]);
+                        if (!exc.IsNullOrEmpty()) Exclusions = new EditableList<string>(exc);
+                        notRollsEcxlusionsLoaded = true;
+                    }
+                }
             }
 
             Dictionary<byte, float> DBDEBaseValues = new Dictionary<byte, float>();
@@ -214,7 +287,7 @@ namespace DynamicBoneDistributionEditor
                 List<byte[]> edits = MessagePackSerializer.Deserialize<List<byte[]>>(serialised);
                 if (!edits[1].IsNullOrEmpty()) DBDEBaseValues = MessagePackSerializer.Deserialize<Dictionary<byte, float>>(edits[1]);
                 if (!edits[5].IsNullOrEmpty()) DBDEFreezeAxis = MessagePackSerializer.Deserialize<byte?>(edits[5]);
-                if (edits.Count >= 8 && !edits[7].IsNullOrEmpty()) DBDEWeight = MessagePackSerializer.Deserialize<float>(edits[7]);
+                if (edits.Count > 7 && !edits[7].IsNullOrEmpty()) DBDEWeight = MessagePackSerializer.Deserialize<float>(edits[7]);
             }
             if (DBDE.loadSettingsAsDefault.Value)
             {
@@ -257,6 +330,7 @@ namespace DynamicBoneDistributionEditor
             
             MultiBoneFix();
             ApplyAll();
+            if (notRollsEcxlusionsLoaded) ApplyNotRollsAndExclusions();
         }
 
         internal void ReferToDynamicBone()
@@ -267,7 +341,7 @@ namespace DynamicBoneDistributionEditor
             if (MakerAPI.InsideAndLoaded && ReidentificationData is KeyValuePair<int, string> kvp)
             {
                 bool noShake = MakerAPI.GetCharacterControl().nowCoordinate.accessory.parts[kvp.Key].noShake;
-                initalActive = !noShake;
+                _initialActive = !noShake;
             }
             _active = DynamicBones.Any(d => d.enabled);
 
@@ -347,57 +421,7 @@ namespace DynamicBoneDistributionEditor
 			distributions[kind].value = animationCurve.keys;
 		}
 
-        // currently not used....
-        internal static byte[] SerialseFromDBE(DynamicBoneData DBE, byte[] serialsedDBDEData = null)
-        {
-
-            byte[] Distributions = MessagePackSerializer.Serialize(new Dictionary<byte, SerialisableKeyframe[]>());
-
-            Dictionary<byte, float> DBDEBaseValues = new Dictionary<byte, float>();
-
-            byte[] Gravity = null;
-            byte[] Force = null;
-            byte[] EndOffset = null;
-
-            byte[] DBDEFreezeAxis = null;
-
-            if (serialsedDBDEData != null) // load DBDE Data
-            {
-                List<byte[]> e = MessagePackSerializer.Deserialize<List<byte[]>>(serialsedDBDEData);
-                if (!e[0].IsNullOrEmpty() && MessagePackSerializer.Deserialize<Dictionary<byte, SerialisableKeyframe[]>>(e[0]).Count > 0) Distributions = e[0];
-                if (!e[1].IsNullOrEmpty()) DBDEBaseValues = MessagePackSerializer.Deserialize<Dictionary<byte, float>>(e[1]); // baseValues
-                if (!e[2].IsNullOrEmpty()) Gravity = e[2]; // gravity
-                if (!e[3].IsNullOrEmpty()) Force = e[3]; // force
-                if (!e[4].IsNullOrEmpty()) EndOffset = e[4]; // endOffset
-                if (!e[5].IsNullOrEmpty()) DBDEFreezeAxis = e[5]; // freezeAxis
-            }
-
-            Dictionary<byte, float> bValues = new Dictionary<byte, float>();
-            if (DBDEBaseValues.ContainsKey(0)) bValues.Add(0, DBDEBaseValues[0]);
-            else if (DBE.Damping.HasValue) bValues.Add(0, DBE.Damping.Value);
-            if (DBDEBaseValues.ContainsKey(1)) bValues.Add(1, DBDEBaseValues[1]);
-            else if (DBE.Elasticity.HasValue) bValues.Add(1, DBE.Elasticity.Value);
-            if (DBDEBaseValues.ContainsKey(2)) bValues.Add(2, DBDEBaseValues[2]);
-            else if (DBE.Inertia.HasValue) bValues.Add(2, DBE.Inertia.Value);
-            if (DBDEBaseValues.ContainsKey(3)) bValues.Add(3, DBDEBaseValues[3]);
-            else if (DBE.Radius.HasValue) bValues.Add(3, DBE.Radius.Value);
-            if (DBDEBaseValues.ContainsKey(4)) bValues.Add(4, DBDEBaseValues[4]);
-            else if (DBE.Stiffness.HasValue) bValues.Add(4, DBE.Stiffness.Value);
-
-            List<byte[]> edits = new List<byte[]>() {
-                Distributions, 
-                MessagePackSerializer.Serialize(bValues), // baseValues
-                Gravity, 
-                Force, 
-                EndOffset, 
-                DBDEFreezeAxis != null ? DBDEFreezeAxis : DBE.FreezeAxis.HasValue ? MessagePackSerializer.Serialize((byte)DBE.FreezeAxis) : null, // freezeAxis as byte or null
-                MessagePackSerializer.Serialize(true) // always assumet the bone is enabled because DBE cannot disable it
-            };
-
-            return MessagePackSerializer.Serialize(edits);
-        }
-
-		public byte[] Serialise()
+        public byte[] Serialise()
 		{
             Dictionary<byte, SerialisableKeyframe[]> distribs = distributions
 				.Select((t, i) => new KeyValuePair<byte, EditableValue<Keyframe[]>>((byte)i, t))
@@ -423,7 +447,11 @@ namespace DynamicBoneDistributionEditor
 
             byte[] sWeight = MessagePackSerializer.Serialize(weight.value);
             
-            var edits = new List<byte[]>() {sDistrib, sBaseValues, sGravity, sForce, sEndOffset, sAxis, sActive, sWeight };
+            byte[] sNotRolls = MessagePackSerializer.Serialize((List<string>)notRolls);
+
+            byte[] sExclusions = MessagePackSerializer.Serialize((List<string>)Exclusions);
+            
+            var edits = new List<byte[]>() {sDistrib, sBaseValues, sGravity, sForce, sEndOffset, sAxis, sActive, sWeight, sNotRolls, sExclusions };
             return MessagePackSerializer.Serialize(edits);
 		}
 
@@ -437,122 +465,70 @@ namespace DynamicBoneDistributionEditor
             return binary;
         }
 
-        ///<summary></summary>
-        /// <param name="axis">X=0, Y=1, Z=2</param>
-        public bool IsGravityEdited(int? axis = null)
-        {
-            if (axis.HasValue)
-            {
-                switch (axis.Value)
-                {
-                    case 0:
-                        return gravity.value.x != gravity.initialValue.x;
-                    case 1:
-                        return gravity.value.y != gravity.initialValue.y;
-                    case 2:
-                        return gravity.value.z != gravity.initialValue.z;
-                    default:
-                        return false;
-                }
-            }
-            else return gravity.IsEdited;
-        }
-        ///<summary></summary>
-        /// <param name="axis">X=0, Y=1, Z=2</param>
-        public bool IsForceEdited(int? axis = null)
-        {
-            if (axis.HasValue)
-            {
-                switch (axis.Value)
-                {
-                    case 0:
-                        return force.value.x != force.initialValue.x;
-                    case 1:
-                        return force.value.y != force.initialValue.y;
-                    case 2:
-                        return force.value.z != force.initialValue.z;
-                    default:
-                        return false;
-                }
-            }
-            else return force.IsEdited;
-        }
-        ///<summary></summary>
-        /// <param name="axis">X=0, Y=1, Z=2</param>
-        public bool IsEndOffsetEdited(int? axis = null)
-        {
-            if (axis.HasValue)
-            {
-                switch (axis.Value)
-                {
-                    case 0:
-                        return endOffset.value.x != endOffset.initialValue.x;
-                    case 1:
-                        return endOffset.value.y != endOffset.initialValue.y;
-                    case 2:
-                        return endOffset.value.z != endOffset.initialValue.z;
-                    default:
-                        return false;
-                }
-            }
-            else return endOffset.IsEdited;
-        }
-
         public bool IsEdited(int kind)
         {
             return distributions[kind].IsEdited || baseValues[kind].IsEdited;
         }
 
-        public bool isActiveEdited()
+        public bool IsActiveEdited()
         {
-            return initalActive != active;
+            return _initialActive != active;
         }
 
-        public bool isWeigthEdited()
-        {
-            return weight.IsEdited;
-        }
-
-		public bool IsEdited()
+        public bool IsEdited()
 		{
-			foreach (var d in distributions)
-			{
-				if (d.IsEdited) return true;
-			}
-            foreach (var d in baseValues)
+			if (distributions.Any(d => d.IsEdited))
             {
-                if (d.IsEdited) return true;
+                return true;
+            }
+            if (baseValues.Any(d => d.IsEdited))
+            {
+                return true;
             }
             if (gravity.IsEdited) return true;
             if (force.IsEdited) return true;
             if (endOffset.IsEdited) return true;
             if (freezeAxis.IsEdited) return true;
-            if (initalActive != active) return true;
+            if (IsActiveEdited()) return true;
             if (weight.IsEdited) return true;
+            if (notRolls.IsEdited) return true;
+            if (Exclusions.IsEdited) return true;
 			return false;
 		}
 
         internal void UpdateActiveStack(bool always = false)
         {
-            List<DynamicBone> DBS = DynamicBones;
-            if (DBS.IsNullOrEmpty()) return;
-            if (active && DBS.FindAll(b => b.enabled == true).Count() == 1) return;
-            if (DBS.Count <= 1 && !always) return;
-            foreach (DynamicBone db in DBS) db.enabled = false; //disable others
+            List<DynamicBone> dbs = DynamicBones;
+            if (dbs.IsNullOrEmpty()) return;
+            if (active && dbs.FindAll(b => b.enabled == true).Count() == 1) return;
+            if (dbs.Count <= 1 && !always) return;
+            foreach (DynamicBone db in dbs) db.enabled = false; //disable others
             if (active)
             {
                 PrimaryDynamicBone.enabled = true; // enable primary
             }
         }
+
+        internal void ReSetup()
+        {
+            MultiBoneFix();
+            DynamicBone db = PrimaryDynamicBone;
+            db.ResetParticlesPosition(); // reset particle positions so that all particles are in their initial positions
+            db.ApplyParticlesToTransforms(); // apply the reset particle positions to all transforms
+            db.SetupParticles(); // ReSetup; this also sets the initial positions of the particles, hence the above
+            MultiBoneFix(); // copy new values to other DynamicBones.
+        }
+        
         /// <summary>
         /// Copies the unchangeable values from the PrimaryDynamicBone to the other DynamicBone components
         /// </summary>
         internal void MultiBoneFix()
         {
-            if (DynamicBones.IsNullOrEmpty() || DynamicBones.Count < 2) return;
+            if (DynamicBones.IsNullOrEmpty()) return;
             foreach (DynamicBone db in DynamicBones)
             {
-                db.m_notRolls = _notRolls;
+                db.m_notRolls = NotRollsTransforms;
+                db.m_Exclusions = ExclusionsTransforms;
                 db.m_Particles = _particles;
                 db.m_Colliders = _colliders;
                 // I hate this but if I don't delay setting the LocalGravity it gets overwritten right again
@@ -590,7 +566,7 @@ namespace DynamicBoneDistributionEditor
             ResetEndOffset();
             ResetFreezeAxis();
             ResetWeight();
-            SetActive(initalActive);
+            SetActive(_initialActive);
         }
 
 		public void ApplyDistribution(int? kind = null)
@@ -870,6 +846,65 @@ namespace DynamicBoneDistributionEditor
                 db.UpdateParticles();
             }
             UpdateActiveStack();
+        }
+
+        public void ApplyNotRollsAndExclusions()
+        {
+            MultiBoneFix();
+            ReSetup();
+        }
+
+        public void ResetNotRolls()
+        {
+            notRolls.Reset();
+            ApplyNotRollsAndExclusions();
+        }
+
+        public void ResetExclusions()
+        {
+            Exclusions.Reset();
+            ApplyNotRollsAndExclusions();
+        }
+        
+
+        public void AddNotRoll(Transform transform)
+        {
+            if (NotRollsTransforms.Contains(transform)) return;
+
+            string pathToChild = PrimaryDynamicBone.m_Root.GetPathToChild(transform);
+            if (pathToChild != null) notRolls.Add(pathToChild);
+            
+            ApplyNotRollsAndExclusions();
+        }
+        
+        public void RemoveNotRoll(Transform transform)
+        {
+            if (!NotRollsTransforms.Contains(transform)) return;
+            
+            string pathToChild = PrimaryDynamicBone.m_Root.GetPathToChild(transform);
+            if (pathToChild != null) notRolls.Remove(pathToChild);
+            
+            ApplyNotRollsAndExclusions();
+        }
+
+        public void AddExclusion(Transform transform)
+        {
+            if (ExclusionsTransforms.Contains(transform)) return;
+
+            string pathToChild = PrimaryDynamicBone.m_Root.GetPathToChild(transform);
+            if (pathToChild != null) Exclusions.Add(pathToChild);
+            
+            ApplyNotRollsAndExclusions();
+        }
+
+        public void RemoveExclusion(Transform transform)
+        {
+            if (!ExclusionsTransforms.Contains(transform)) return;
+
+            string pathToChild = PrimaryDynamicBone.m_Root.GetPathToChild(transform);
+            if (pathToChild != null) Exclusions.Remove(pathToChild);
+            
+            ApplyNotRollsAndExclusions();
         }
 
         public override string ToString()

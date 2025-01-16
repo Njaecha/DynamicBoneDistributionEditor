@@ -9,6 +9,7 @@ using static AnimationCurveEditor.AnimationCurveEditor;
 using static AnimationCurveEditor.AnimationCurveEditor.KeyframeEditedArgs;
 using static Illusion.Utils;
 using System.Linq;
+using KK.DynamicBoneDistributionEditor;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -42,6 +43,8 @@ namespace DynamicBoneDistributionEditor
         private Vector3EditWrapper endOffsetWrapper;
         
         private BaseValueEditWrapper weightWrapper;
+        
+        private bool notRollsOpened = false;
         #endregion
 
         #region fields for DynamicBoneColliders
@@ -53,6 +56,9 @@ namespace DynamicBoneDistributionEditor
         private BaseValueEditWrapper lengthWrapper;
 
         private Vector3EditWrapper offsetWrapper;
+
+        private StringListWrapper notRollsWrapper;
+        private StringListWrapper exclusionsWrapper;
 
         #endregion
 
@@ -85,7 +91,7 @@ namespace DynamicBoneDistributionEditor
         public DBDECharaController referencedChara = null;
 
         public bool UpdateUIWhileOpen = true;
-
+        
         void Start()
         {
             rTex = new RenderTexture(Screen.width, Screen.height, 32);
@@ -268,9 +274,12 @@ namespace DynamicBoneDistributionEditor
             };
             gravityWrapper = new Vector3EditWrapper(db.m_Gravity, (v) => { Editing.gravity.value = v; Editing.ApplyGravity(); });
             forceWrapper = new Vector3EditWrapper(db.m_Force, (v) => { Editing.force.value = v; Editing.ApplyForce(); });
-            endOffsetWrapper = new Vector3EditWrapper(db.m_EndOffset, (v) => { Editing.endOffset.value = v; Editing.ApplyEndOffset(); });
+            endOffsetWrapper = new Vector3EditWrapper(db.m_EndOffset, (v) => { Editing.endOffset.value = v;Editing.ApplyEndOffset(); });
             
             weightWrapper = new BaseValueEditWrapper(db.m_Weight, (v) => { Editing.weight.value = v; Editing.ApplyWeight();});
+
+            notRollsWrapper = new StringListWrapper(db.m_Root);
+            exclusionsWrapper = new StringListWrapper(db.m_Root);
             
             DBDEGizmoController gizmo = Camera.main.GetOrAddComponent<DBDEGizmoController>();
             gizmo.Editing = Editing;
@@ -321,7 +330,7 @@ namespace DynamicBoneDistributionEditor
             GUILayout.BeginVertical(GUILayout.Width(windowRect.width / 6 * 2 + 5)); // width 2/6
             GUILayout.Space(4);
             GUILayout.BeginHorizontal();
-            filterText = GUILayout.TextField(filterText);
+            filterText = GUILayout.TextArea(filterText); // TODO: figure out way to not break the UI with this
             if (GUILayout.Button("Clear", GUILayout.Width(55))) filterText = string.Empty;
             GUILayout.EndHorizontal();
             LeftSideScroll = GUILayout.BeginScrollView(LeftSideScroll); 
@@ -381,7 +390,7 @@ namespace DynamicBoneDistributionEditor
                     bool noShake = MakerAPI.GetCharacterControl().nowCoordinate.accessory.parts[kvp.Key].noShake;
                     if (noShake) GUI.enabled = false;
                 }
-                if (Editing.isActiveEdited()) GUI.color = Color.magenta;
+                if (Editing.IsActiveEdited()) GUI.color = Color.magenta;
                 if (GUILayout.Button(new GUIContent(Editing.active ? "ON" : "OFF", "Toggle DynamicBone"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
                 {
                     Editing.active = !Editing.active;
@@ -392,6 +401,7 @@ namespace DynamicBoneDistributionEditor
                 #endregion
 
                 RightSideScroll = GUILayout.BeginScrollView(RightSideScroll);
+                
                 #region Right Side - Freeze Axis
                 GUILayout.BeginHorizontal();
                 if (Editing.freezeAxis.IsEdited) GUI.color = Color.magenta;
@@ -436,8 +446,8 @@ namespace DynamicBoneDistributionEditor
 
                 #region Right Side - Weight
                 GUILayout.BeginHorizontal();
-                GUI.color = Editing.isWeigthEdited() ? Color.magenta : guic;
-                GUILayout.Label("Weight" + (Editing.isWeigthEdited() ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6), GUILayout.Height(weightWrapper.Active ? 50 : 25)); // width 1/6
+                GUI.color = Editing.weight.IsEdited ? Color.magenta : guic;
+                GUILayout.Label("Weight" + (Editing.weight.IsEdited ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6), GUILayout.Height(weightWrapper.Active ? 50 : 25)); // width 1/6
                 GUI.color = guic;
                 
                 GUILayout.BeginVertical(); // two rows
@@ -621,10 +631,59 @@ namespace DynamicBoneDistributionEditor
                 }
                 #endregion
 
-                DrawVectorControl("Gravity", (a) => Editing.IsGravityEdited(a), gravityWrapper, ref Editing.gravity, Editing.ApplyGravity, Editing.ResetGravity);
-                DrawVectorControl("Force", (a) => Editing.IsForceEdited(a), forceWrapper, ref Editing.force, Editing.ApplyForce, Editing.ResetForce);
-                DrawVectorControl("EndOffset", (a) => Editing.IsEndOffsetEdited(a), endOffsetWrapper, ref Editing.endOffset, Editing.ApplyEndOffset, Editing.ResetEndOffset);
+                DrawVectorControl("Gravity", (a) => Editing.gravity.AxisEdited(a), gravityWrapper, ref Editing.gravity, Editing.ApplyGravity, Editing.ResetGravity);
+                GUILayout.Space(5);
+                DrawVectorControl("Force", (a) => Editing.force.AxisEdited(a), forceWrapper, ref Editing.force, Editing.ApplyForce, Editing.ResetForce);
+                GUILayout.Space(5);
+                DrawVectorControl("EndOffset", (a) => Editing.endOffset.AxisEdited(a), endOffsetWrapper, ref Editing.endOffset, Editing.ApplyEndOffset, Editing.ResetEndOffset);
+                if (GUILayout.Button(new GUIContent("Re-Setup Particles",
+                        "Use this to rediscover dynamic bone particles. Needed for EndOffset changes to take effect.")))
+                {
+                    Editing.ReSetup();
+                }
+                GUILayout.Space(5);
 
+                #region Right Side - Not Rolls
+
+                DrawStringListControl(
+                    "NotRolls", 
+                    notRollsWrapper, 
+                    ref Editing.notRolls, 
+                    () => Editing.ResetNotRolls(),
+                    (bone) =>
+                        {
+                            Transform t = Editing.PrimaryDynamicBone.m_Root.Find(bone);
+                            Editing.AddNotRoll(t);
+                        }, 
+                    (bone) =>
+                        {
+                            Transform t = Editing.PrimaryDynamicBone.m_Root.Find(bone);
+                            Editing.RemoveNotRoll(t);
+                        }
+                    );
+
+                #endregion
+                #region Right Side - Exclusions
+                
+                DrawStringListControl(
+                    "Exclusions", 
+                    exclusionsWrapper, 
+                    ref Editing.Exclusions, 
+                    () => Editing.ResetExclusions(),
+                    (bone) =>
+                    {
+                        Transform t = Editing.PrimaryDynamicBone.m_Root.Find(bone);
+                        Editing.AddExclusion(t);
+                    }, 
+                    (bone) =>
+                    {
+                        Transform t = Editing.PrimaryDynamicBone.m_Root.Find(bone);
+                        Editing.RemoveExclusion(t);
+                    }
+                );
+                
+                #endregion
+                
                 GUILayout.EndScrollView();
 
                 #region Right Side - Footer
@@ -669,6 +728,82 @@ namespace DynamicBoneDistributionEditor
             windowRect = KKAPI.Utilities.IMGUIUtils.DragResizeEatWindow(WindowID, windowRect);
         }
 
+        // TODO: make list for now
+        private void DrawStringListControl(
+            string controlName,
+            StringListWrapper wrapper,
+            ref EditableList<string> editableList,
+            Action resetFunc,
+            Action<string> addBoneFunc,
+            Action<string> removeBoneFunc
+        )
+        {
+            Color guic = GUI.color;
+            GUIStyle LabelStyle = new GUIStyle(GUI.skin.box);
+            LabelStyle.alignment = TextAnchor.MiddleCenter;
+            
+            GUILayout.BeginHorizontal();
+            // == top row ==
+            #region top
+            if (editableList.IsEdited) GUI.color = Color.magenta;
+            GUILayout.Label(controlName + (editableList.IsEdited ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6));
+            GUI.color = guic;
+            if (wrapper.Active)
+            {
+                if (GUILayout.Button(new GUIContent("Hide", $"Hide {controlName} List")))
+                {
+                    wrapper.Active = false;
+                }
+            }
+            else
+            {
+                if (GUILayout.Button(new GUIContent("Show", $"Show {controlName} List")))
+                {
+                    wrapper.Active = true;
+                }
+            }
+            if (editableList.IsEdited) GUI.color = Color.magenta;
+            else GUI.enabled = false;
+            if (GUILayout.Button(new GUIContent("R", $"Reset {controlName}"), GUILayout.Width(25)))
+            {
+                resetFunc.Invoke();
+            }
+            GUI.enabled = true;
+            GUI.color = guic;
+            GUILayout.EndHorizontal();
+            #endregion
+            if (!wrapper.Active) return;
+            
+            
+            var markedForRemoval = new List<string>();
+            foreach (string bone in editableList)
+            {
+                GUILayout.BeginHorizontal();
+
+                if (!editableList.ContainsOriginal(bone)) GUI.color = Color.magenta;
+                GUILayout.TextField(bone, GUILayout.Width(windowRect.width / 7 * 4)); // TODO: doesnt work properly (can't scroll through text)
+                GUI.color = guic;
+                if (GUILayout.Button(new GUIContent("-", $"Remove {bone} from {controlName} List"), GUILayout.Width(25)))
+                {
+                    markedForRemoval.Add(bone);
+                }
+                GUILayout.EndHorizontal();
+            }
+            foreach (string bone in markedForRemoval) removeBoneFunc.Invoke(bone);
+
+            GUILayout.BeginHorizontal();
+            GUI.color = wrapper.AddBoneTextValid ? Color.green : Color.red;
+            wrapper.AddBoneText = GUILayout.TextField(wrapper.AddBoneText, GUILayout.MaxWidth(windowRect.width / 7 * 4)); // TODO: doesnt work properly (can't scroll through text)
+            GUI.color = guic;
+            if (!wrapper.AddBoneTextValid) GUI.enabled = false;
+            if (GUILayout.Button(new GUIContent("+", $"Add bone to {controlName} List"), GUILayout.Width(25)))
+            {
+                if (wrapper.AddBoneTextValid) addBoneFunc.Invoke(wrapper.AddBoneText);
+            }
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+        }
+        
         private void DrawVectorControl(
             string VectorName,
             Func<int?,bool> isEditedFunc,
@@ -746,7 +881,7 @@ namespace DynamicBoneDistributionEditor
                 DrawAxisSliders(Vector3EditWrapper.Axis.Y, wrapper, ref editableValue, editableValue.initialValue.y, isEditedFunc, applyFunc);
                 DrawAxisSliders(Vector3EditWrapper.Axis.Z, wrapper, ref editableValue, editableValue.initialValue.z, isEditedFunc, applyFunc);
             }
-            GUILayout.Space(5);
+            
         }
 
         private void DrawAxisSliders(
@@ -1004,6 +1139,43 @@ namespace DynamicBoneDistributionEditor
             {
                 X, Y, Z
             }
+        }
+
+        private class StringListWrapper
+        {
+            private Transform rootTransform;
+            public bool Active;
+            private string _addBoneText;
+            public string AddBoneText
+            {
+                get => _addBoneText;
+                set => SetText(value);
+            }
+            
+            public Vector2 Scroll { get; set; }
+            
+            public bool AddBoneTextValid
+            {
+                get
+                {
+                    Transform f = rootTransform.Find(AddBoneText);
+                    return f;
+                }
+            }
+
+            public StringListWrapper(Transform rootTransform)
+            {
+                this.rootTransform = rootTransform;
+                Active = false;
+                _addBoneText = "";
+            }
+
+            private void SetText(string text)
+            {
+                _addBoneText = text;
+            }
+            
+            
         }
     }
 }

@@ -32,7 +32,7 @@ namespace DynamicBoneDistributionEditor
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "1.4.0";
+        public const string Version = "1.5.0";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
@@ -191,31 +191,27 @@ namespace DynamicBoneDistributionEditor
         /// <returns>If name could be constructed</returns>
         public static bool TryGetAccessoryQualifiedName(this DynamicBone dynamicBone, out string value)
         {
-            if (dynamicBone.m_Root == null)
+            if (!dynamicBone.m_Root)
             {
                 value = null; return false;
             }
             if (cacheA.TryGetValue(dynamicBone, out value) && value.EndsWith(dynamicBone.m_Root.name)) return true;
             ChaAccessoryComponent component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaAccessoryComponent>(true)?.FirstOrDefault();
-            if (component == null) return false;
-            string rootBonePath = dynamicBone.m_Root.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            if (!rootBonePath.StartsWith(componentPath)) return false;
-            value = rootBonePath.Replace(componentPath, string.Empty);
+            if (!component) return false;
+            value = component.transform.GetPathToChild(dynamicBone.m_Root);
+            if (value == null) return false;
             cacheA[dynamicBone] = value;
             return true;
         }
 
         public static string GetAccessoryQualifiedName(this DynamicBone dynamicBone)
         {
-            if (dynamicBone.m_Root == null) return null;
+            if (!dynamicBone.m_Root) return null;
             if (cacheA.TryGetValue(dynamicBone, out string value) && value.EndsWith(dynamicBone.m_Root.name)) return value;
             ChaAccessoryComponent component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaAccessoryComponent>(true)?[0];
-            if (component == null) return null;
-            string rootBonePath = dynamicBone.m_Root.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            if (!rootBonePath.StartsWith(componentPath)) return null;
-            value = rootBonePath.Replace(componentPath, string.Empty);
+            if (!component) return null;
+            value = component.transform.GetPathToChild(dynamicBone.m_Root);
+            if (value == null) return null;
             cacheA[dynamicBone] = value;
             return value;
         }
@@ -226,33 +222,43 @@ namespace DynamicBoneDistributionEditor
         /// <returns>If name could be constructed</returns>
         public static bool TryGetChaControlQualifiedName(this DynamicBone dynamicBone, out string value)
         {
-            if (dynamicBone.m_Root == null)
+            if (!dynamicBone.m_Root)
             {
                 value = null; return false;
             }
             if (cacheC.TryGetValue(dynamicBone, out value) && value.EndsWith(dynamicBone.m_Root.name)) return true;
             ChaControl component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaControl>(true)?.FirstOrDefault();
-            if (component == null) return false;
-            string rootBonePath = dynamicBone.m_Root?.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            if (!rootBonePath.StartsWith(componentPath)) return false;
-            value = rootBonePath.Replace(componentPath, string.Empty);
+            if (!component) return false;
+            value = component.transform.GetPathToChild(dynamicBone.m_Root);
+            if (value == null) return false;
             cacheC[dynamicBone] = value;
             return true;
         }
 
         public static string GetChaControlQualifiedName(this DynamicBone dynamicBone)
         {
-            if (dynamicBone.m_Root == null) return null;
+            if (!dynamicBone.m_Root) return null;
             if (cacheA.TryGetValue(dynamicBone, out string value) && value.EndsWith(dynamicBone.m_Root.name)) return value;
             ChaControl component = dynamicBone.m_Root?.transform.GetComponentsInParent<ChaControl>(true)?[0];
-            if (component == null) return null;
-            string rootBonePath = dynamicBone.m_Root.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            string componentPath = component.transform.GetFullPath().Trim().Replace(" [Transform]", "");
-            if (!rootBonePath.StartsWith(componentPath)) return null;
-            value = rootBonePath.Replace(componentPath, string.Empty);
+            if (!component) return null;
+            value = component.transform.GetPathToChild(dynamicBone.m_Root);
+            if (value == null) return null;
             cacheC[dynamicBone] = value;
             return value;
+        }
+
+        /// <summary>
+        /// Gets Path from this transform to one of its children.
+        /// The string returned by this extension can be used with .Find() on the parent to find the child.
+        /// </summary>
+        /// <param name="transform"></param>
+        /// <param name="child"></param>
+        /// <returns></returns>
+        public static string GetPathToChild(this Transform transform, Transform child)
+        {
+            string pPath = transform.GetFullPath().Trim().Replace(" [Transform]", "");
+            string cPath = child.GetFullPath().Trim().Replace(" [Transform]", "");
+            return !cPath.StartsWith(pPath) ? null : cPath.Replace(pPath, string.Empty).Remove(0,1);
         }
 
         /// <summary>
@@ -313,6 +319,22 @@ namespace DynamicBoneDistributionEditor
             self.anchorMax = anchorMax;
             self.offsetMin = offsetMin;
             self.offsetMax = offsetMax;
+        }
+
+        public static bool AxisEdited(this EditableValue<Vector3> self, int? axis = null)
+        {
+            if (!axis.HasValue) return self.IsEdited;
+            switch (axis.Value)
+            {
+                case 0:
+                    return !Mathf.Approximately(self.value.x, self.initialValue.x);
+                case 1:
+                    return !Mathf.Approximately(self.value.y, self.initialValue.y);
+                case 2:
+                    return !Mathf.Approximately(self.value.z, self.initialValue.z);
+                default:
+                    return false;
+            }
         }
     }
 }
