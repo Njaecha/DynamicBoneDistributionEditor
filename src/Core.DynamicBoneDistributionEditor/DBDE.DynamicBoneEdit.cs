@@ -6,7 +6,7 @@ using UnityEngine;
 using MessagePack;
 using KKAPI.Utilities;
 using DBDE.KK_Plugins.DynamicBoneEditor;
-using KK.DynamicBoneDistributionEditor;
+using DynamicBoneDistributionEditor;
 using UniRx;
 using KKAPI.Maker;
 using static AnimationCurveEditor.AnimationCurveEditor.KeyframeEditedArgs;
@@ -52,6 +52,7 @@ namespace DynamicBoneDistributionEditor
         {
             get
             {
+                if (Exclusions.Count == 0) return new List<Transform>();
                 return Exclusions.Select(t => PrimaryDynamicBone.m_Root.Find(t)).Where(t => t).ToList();
             }
         }
@@ -233,8 +234,8 @@ namespace DynamicBoneDistributionEditor
             endOffset = new EditableValue<Vector3>(db.m_EndOffset);
             freezeAxis = new EditableValue<DynamicBone.FreezeAxis>(db.m_FreezeAxis);
             weight = new EditableValue<float>(db.m_Weight);
-            notRolls = new EditableList<string>(db.m_notRolls.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty()));
-            Exclusions = new EditableList<string>(db.m_Exclusions.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty()));
+            notRolls = db.m_notRolls != null ? new EditableList<string>(db.m_notRolls.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty())) : new EditableList<string>();
+            Exclusions = db.m_Exclusions != null ? new EditableList<string>(db.m_Exclusions.Select(t => db.m_Root.GetPathToChild(t)).Where(t => !t.IsNullOrEmpty())) : new EditableList<string>();
 
             var notRollsEcxlusionsLoaded = false;
             
@@ -511,7 +512,13 @@ namespace DynamicBoneDistributionEditor
 
         internal void ReSetup()
         {
+            DBDE.Instance.StartCoroutine(Setup());
+        }
+        
+        private IEnumerator Setup()
+        {
             MultiBoneFix();
+            yield return null; // wait for MultiBoneFix to finish
             DynamicBone db = PrimaryDynamicBone;
             db.ResetParticlesPosition(); // reset particle positions so that all particles are in their initial positions
             db.ApplyParticlesToTransforms(); // apply the reset particle positions to all transforms
@@ -556,7 +563,10 @@ namespace DynamicBoneDistributionEditor
             // does this create issues?
             SetActive(active);
         }
-
+        
+        /// <summary>
+        /// Resets all values except NotRolls and Exclusions
+        /// </summary>
         public void ResetAll()
         {
             ResetBaseValues();
@@ -850,7 +860,6 @@ namespace DynamicBoneDistributionEditor
 
         public void ApplyNotRollsAndExclusions()
         {
-            MultiBoneFix();
             ReSetup();
         }
 

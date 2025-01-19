@@ -44,6 +44,10 @@ namespace DynamicBoneDistributionEditor
         public static ConfigEntry<bool> loadSettingsAsDefault;
         public static ConfigEntry<bool> drawGizmos;
 
+        private static Button DBDEStudioButton;
+        
+        Harmony harmony;
+
         void Awake()
         {
             Logger = base.Logger;
@@ -57,20 +61,31 @@ namespace DynamicBoneDistributionEditor
             AccessoriesApi.AccessoriesCopied += AccessoryCopied;
             AccessoriesApi.AccessoryTransferred += AccessoryTransferred;
 
-            Harmony.CreateAndPatchAll(typeof(DBDEHooks));
+            harmony = Harmony.CreateAndPatchAll(typeof(DBDEHooks));
 
             MakerAPI.MakerBaseLoaded += createSideBarToggle;
 
-            MakerAPI.MakerExiting += leavingMaker;
-
+            MakerAPI.MakerExiting += LeavingMaker;
 
             loadSettingsAsDefault = Config.Bind("", "Load Settings as default", false, "Enable this to load the settings saved by DBDE as defaults (for the revert buttons) instead of the dynamic bone's own defaults (set by game/zipmod).");
             drawGizmos = Config.Bind("", "Draw Gizmos", true, "Toggle gizmos. Can also be toggled in the UI");
 
             Instance = this;
+
+            if (KKAPI.Studio.StudioAPI.StudioLoaded)
+            {
+                createStudioButton("Studio");
+            }
         }
 
-        private void leavingMaker(object sender, EventArgs e)
+        private void OnDestroy()
+        {
+            Destroy(DBDESceneController.Instance);
+            Destroy(DBDEGizmoController.Instance);
+            harmony?.UnpatchSelf();
+        }
+
+        private static void LeavingMaker(object sender, EventArgs e)
         {
             UI.Close();
         }
@@ -102,7 +117,7 @@ namespace DynamicBoneDistributionEditor
 
             RectTransform original = GameObject.Find("StudioScene").transform.Find("Canvas Object List/Image Bar/Button Route").GetComponent<RectTransform>();
 
-            Button DBDEStudioButton = Instantiate(original.gameObject).GetComponent<Button>();
+            DBDEStudioButton = Instantiate(original.gameObject).GetComponent<Button>();
             DBDEStudioButton.name = "Button DBDE";
 
             RectTransform DBDEStudioButtonTransfrom = DBDEStudioButton.transform as RectTransform;
@@ -126,7 +141,7 @@ namespace DynamicBoneDistributionEditor
                 {
                     if (ocis[0] is Studio.OCIItem item)
                     {
-                        GetComponentInChildren<DBDESceneController>()?.OpenDBDE(item);
+                        DBDESceneController.Instance?.OpenDBDE(item);
                     }
 
                     if (ocis[0] is Studio.OCIChar cha)
@@ -156,7 +171,7 @@ namespace DynamicBoneDistributionEditor
         {
             int dSlot = e.DestinationSlotIndex;
             int sSlot = e.SourceSlotIndex;
-            MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryTransferedEvent(sSlot, dSlot);
+            MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryTransferredEvent(sSlot, dSlot);
         }
 
         private void AccessoryCopied(object sender, AccessoryCopyEventArgs e)
@@ -173,9 +188,11 @@ namespace DynamicBoneDistributionEditor
             MakerAPI.GetCharacterControl().gameObject.GetComponent<DBDECharaController>().AccessoryChangedEvent(slot);
         }
 
-        internal CursorManager getMakerCursorMangaer()
+        internal CursorManager getMakerCursorManager()
         {
-            return base.gameObject.GetComponent<CursorManager>();
+            CursorManager cursorManager = base.gameObject.GetComponent<CursorManager>();
+            if (!cursorManager) cursorManager = GameObject.Find("BepInEx_Manager").GetComponent<CursorManager>();
+            return cursorManager;
         }
     }
 
@@ -258,6 +275,7 @@ namespace DynamicBoneDistributionEditor
         {
             string pPath = transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string cPath = child.GetFullPath().Trim().Replace(" [Transform]", "");
+            if (pPath == cPath || pPath.IsNullOrEmpty() || cPath.IsNullOrEmpty() ) return null;
             return !cPath.StartsWith(pPath) ? null : cPath.Replace(pPath, string.Empty).Remove(0,1);
         }
 

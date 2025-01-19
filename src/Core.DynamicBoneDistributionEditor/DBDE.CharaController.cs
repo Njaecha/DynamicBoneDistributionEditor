@@ -443,7 +443,7 @@ namespace DynamicBoneDistributionEditor
                 yield return null;
             }
 
-            while (ChaControl == null || ChaControl.objHead == null)
+            while (!ChaControl || !ChaControl.objHead)
                 yield return null;
 
             if (!DistributionEdits.ContainsKey(outfit)) DistributionEdits.Add(outfit, new List<DBDEDynamicBoneEdit>());
@@ -527,12 +527,12 @@ namespace DynamicBoneDistributionEditor
             }
         }
 
-        internal void AccessoryTransferedEvent(int source, int destination)
+        internal void AccessoryTransferredEvent(int source, int destination)
         {
-            StartCoroutine(AccessoryTransferedDelayed(source, destination));
+            StartCoroutine(AccessoryTransferredDelayed(source, destination));
         }
 
-        private IEnumerator AccessoryTransferedDelayed(int source, int destination)
+        private IEnumerator AccessoryTransferredDelayed(int source, int destination)
         {
             DBDE.UI.UpdateUIWhileOpen = false;
             yield return null;

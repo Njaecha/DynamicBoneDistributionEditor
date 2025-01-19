@@ -18,13 +18,13 @@ namespace DynamicBoneDistributionEditor
 {
     public class DBDESceneController : SceneCustomFunctionController
     {
-        internal static DBDESceneController instance;
+        internal static DBDESceneController Instance;
 
-        internal Dictionary<int, List<DBDEDynamicBoneEdit>> DistributionEdits = new Dictionary<int, List<DBDEDynamicBoneEdit>>();
+        internal readonly Dictionary<int, List<DBDEDynamicBoneEdit>> DistributionEdits = new Dictionary<int, List<DBDEDynamicBoneEdit>>();
 
         void Start()
         {
-            instance = this;
+            Instance = this;
         }
 
         protected override void OnSceneLoad(SceneOperationKind operation, ReadOnlyDictionary<int, ObjectCtrlInfo> loadedItems)
@@ -52,6 +52,7 @@ namespace DynamicBoneDistributionEditor
             PluginData data = GetExtendedData();
             if (data != null && data.data.TryGetValue("Edits", out var bytes) && bytes != null)
             {
+                // item key -> list of DynamicBoneEdits
                 Dictionary<int, List<byte[]>> intermediate = MessagePackSerializer.Deserialize<Dictionary<int, List<byte[]>>>((byte[])bytes);
 
                 foreach (int oldKey in intermediate.Keys)

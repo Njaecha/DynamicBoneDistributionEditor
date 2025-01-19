@@ -9,7 +9,10 @@ using static AnimationCurveEditor.AnimationCurveEditor;
 using static AnimationCurveEditor.AnimationCurveEditor.KeyframeEditedArgs;
 using static Illusion.Utils;
 using System.Linq;
-using KK.DynamicBoneDistributionEditor;
+using System.Text;
+using IllusionUtility.GetUtility;
+using DynamicBoneDistributionEditor;
+using KKAPI.Utilities;
 
 namespace DynamicBoneDistributionEditor
 {
@@ -57,8 +60,8 @@ namespace DynamicBoneDistributionEditor
 
         private Vector3EditWrapper offsetWrapper;
 
-        private StringListWrapper notRollsWrapper;
-        private StringListWrapper exclusionsWrapper;
+        private TransformNameListWrapper notRollsWrapper;
+        private TransformNameListWrapper exclusionsWrapper;
 
         #endregion
 
@@ -123,15 +126,14 @@ namespace DynamicBoneDistributionEditor
             if (KKAPI.Maker.MakerAPI.InsideAndLoaded && currentEdit.HasValue)
             {
                 AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetOrAddComponent<AnimationCurveEditor.AnimationCurveEditor>();
-                if (ace && ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == true)
+                if (ace && ace.eatingInput && DBDE.Instance.getMakerCursorManager() && DBDE.Instance.getMakerCursorManager().isActiveAndEnabled == true)
                 {
-                    DBDE.Instance.getMakerCursorMangaer().enabled = false;
+                    DBDE.Instance.getMakerCursorManager().enabled = false;
                 }
-                if (ace && !ace.eatingInput && DBDE.Instance.getMakerCursorMangaer() != null && DBDE.Instance.getMakerCursorMangaer().isActiveAndEnabled == false)
+                if (ace && !ace.eatingInput && DBDE.Instance.getMakerCursorManager() && DBDE.Instance.getMakerCursorManager().isActiveAndEnabled == false)
                 {
-                    DBDE.Instance.getMakerCursorMangaer().enabled = true;
+                    DBDE.Instance.getMakerCursorManager().enabled = true;
                 }
-
             }
         }
 
@@ -278,8 +280,8 @@ namespace DynamicBoneDistributionEditor
             
             weightWrapper = new BaseValueEditWrapper(db.m_Weight, (v) => { Editing.weight.value = v; Editing.ApplyWeight();});
 
-            notRollsWrapper = new StringListWrapper(db.m_Root);
-            exclusionsWrapper = new StringListWrapper(db.m_Root);
+            notRollsWrapper = new TransformNameListWrapper(db.m_Root);
+            exclusionsWrapper = new TransformNameListWrapper(db.m_Root);
             
             DBDEGizmoController gizmo = Camera.main.GetOrAddComponent<DBDEGizmoController>();
             gizmo.Editing = Editing;
@@ -351,6 +353,8 @@ namespace DynamicBoneDistributionEditor
                 if (GUILayout.Button("R", GUILayout.Width(25)))
                 {
                     DBEdit.ResetAll();
+                    DBEdit.ResetNotRolls();
+                    DBEdit.ResetExclusions();
                 }
                 GUI.enabled = true; GUI.color = guic;
                 GUILayout.EndHorizontal();
@@ -686,6 +690,7 @@ namespace DynamicBoneDistributionEditor
                 
                 GUILayout.EndScrollView();
 
+                GUILayout.FlexibleSpace();
                 #region Right Side - Footer
                 GUILayout.BeginHorizontal(); // bone level buttons
                 if (Clipboard != null && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
@@ -707,6 +712,8 @@ namespace DynamicBoneDistributionEditor
                 if (GUILayout.Button("Reset All"))
                 {
                     Editing.ResetAll();
+                    Editing.ResetNotRolls();
+                    Editing.ResetExclusions();
                 }
                 GUI.enabled = true; GUI.color = guic;
                 if (Clipboard != null) GUI.color = Color.red;
@@ -724,14 +731,14 @@ namespace DynamicBoneDistributionEditor
 
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
-            KKAPI.Utilities.IMGUIUtils.DrawTooltip(windowRect, 150);
-            windowRect = KKAPI.Utilities.IMGUIUtils.DragResizeEatWindow(WindowID, windowRect);
+            IMGUIUtils.DrawTooltip(windowRect, 150);
+            windowRect = IMGUIUtils.DragResizeEatWindow(WindowID, windowRect);
         }
 
         // TODO: make list for now
         private void DrawStringListControl(
             string controlName,
-            StringListWrapper wrapper,
+            TransformNameListWrapper wrapper,
             ref EditableList<string> editableList,
             Action resetFunc,
             Action<string> addBoneFunc,
@@ -739,14 +746,16 @@ namespace DynamicBoneDistributionEditor
         )
         {
             Color guic = GUI.color;
-            GUIStyle LabelStyle = new GUIStyle(GUI.skin.box);
-            LabelStyle.alignment = TextAnchor.MiddleCenter;
-            
+            GUIStyle labelStyle = new GUIStyle(GUI.skin.box)
+            {
+                alignment = TextAnchor.MiddleCenter
+            };
+
             GUILayout.BeginHorizontal();
             // == top row ==
             #region top
             if (editableList.IsEdited) GUI.color = Color.magenta;
-            GUILayout.Label(controlName + (editableList.IsEdited ? "*" : ""), LabelStyle, GUILayout.Width(windowRect.width / 6));
+            GUILayout.Label(controlName + (editableList.IsEdited ? "*" : ""), labelStyle, GUILayout.Width(windowRect.width / 6));
             GUI.color = guic;
             if (wrapper.Active)
             {
@@ -776,32 +785,64 @@ namespace DynamicBoneDistributionEditor
             
             
             var markedForRemoval = new List<string>();
-            foreach (string bone in editableList)
+            if (editableList.Count == 0)
             {
                 GUILayout.BeginHorizontal();
-
-                if (!editableList.ContainsOriginal(bone)) GUI.color = Color.magenta;
-                GUILayout.TextField(bone, GUILayout.Width(windowRect.width / 7 * 4)); // TODO: doesnt work properly (can't scroll through text)
-                GUI.color = guic;
-                if (GUILayout.Button(new GUIContent("-", $"Remove {bone} from {controlName} List"), GUILayout.Width(25)))
-                {
-                    markedForRemoval.Add(bone);
-                }
+                GUILayout.Space(10);
+                GUILayout.Label($"{controlName}: <Empty List>", new GUIStyle(GUI.skin.box));
+                GUILayout.Space(10);
                 GUILayout.EndHorizontal();
             }
-            foreach (string bone in markedForRemoval) removeBoneFunc.Invoke(bone);
-
-            GUILayout.BeginHorizontal();
-            GUI.color = wrapper.AddBoneTextValid ? Color.green : Color.red;
-            wrapper.AddBoneText = GUILayout.TextField(wrapper.AddBoneText, GUILayout.MaxWidth(windowRect.width / 7 * 4)); // TODO: doesnt work properly (can't scroll through text)
-            GUI.color = guic;
-            if (!wrapper.AddBoneTextValid) GUI.enabled = false;
-            if (GUILayout.Button(new GUIContent("+", $"Add bone to {controlName} List"), GUILayout.Width(25)))
+            else
             {
-                if (wrapper.AddBoneTextValid) addBoneFunc.Invoke(wrapper.AddBoneText);
+                foreach (string bone in editableList)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(10);
+                    if (!editableList.ContainsOriginal(bone)) GUI.color = Color.magenta;
+                    GUILayout.TextField(bone, new GUIStyle(GUI.skin.box){ alignment = TextAnchor.UpperLeft, wordWrap = true}, GUILayout.MaxWidth(windowRect.width * 4 / 7)); 
+                    GUI.color = guic;
+                    if (GUILayout.Button(new GUIContent("-", $"Remove {bone} from {controlName} List"), GUILayout.MinWidth(25), GUILayout.ExpandHeight(true)))
+                    {
+                        markedForRemoval.Add(bone);
+                    }
+                    GUILayout.Space(10);
+                    GUILayout.EndHorizontal();
+                }
             }
-            GUI.enabled = true;
+            foreach (string bone in markedForRemoval) removeBoneFunc.Invoke(bone);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Search", new GUIStyle(GUI.skin.box));
+            wrapper.AddBoneText = GUILayout.TextField(wrapper.AddBoneText, GUILayout.MaxWidth(windowRect.width * 4 / 9));
+            if (GUILayout.Button(new GUIContent("?", "Display help text"))) wrapper.ShowHelp = !wrapper.ShowHelp;
             GUILayout.EndHorizontal();
+            if (wrapper.ShowHelp)
+            {
+                GUILayout.Label($"This list contains relative paths to transforms in the {controlName} list. " +
+                                $"To add a transform to the list type its name here. " +
+                                $"A list of bones containing the typed name will show below. " +
+                                $"Press the add button there to add a bone to th list. " +
+                                $"To Remove a transform, press \"-\" on the list entry above.", new GUIStyle(GUI.skin.label){wordWrap = true});
+            }
+            if (wrapper.transformSuggestions.Count > 0)
+            {
+                foreach (var text in wrapper.transformSuggestions)
+                {
+                    GUILayout.BeginHorizontal(GUI.skin.box);
+                    if (editableList.Contains(text)) GUI.enabled = false;
+                    if (GUILayout.Button(new GUIContent("Add", $"Add to {controlName} list"),new GUIStyle(GUI.skin.button){stretchHeight = true}, GUILayout.Width(35)))
+                    {
+                        addBoneFunc.Invoke(text);
+                    }
+                    GUI.enabled = true;
+                    GUILayout.TextField(text, GUI.skin.label);
+                    if (GUILayout.Button(new GUIContent("c", "Copy to windows clipboard"),new GUIStyle(GUI.skin.button){stretchHeight = true}, GUILayout.Width(20)))
+                    {
+                        GUIUtility.systemCopyBuffer = text;
+                    }
+                    GUILayout.EndHorizontal();
+                }
+            }
         }
         
         private void DrawVectorControl(
@@ -1141,9 +1182,9 @@ namespace DynamicBoneDistributionEditor
             }
         }
 
-        private class StringListWrapper
+        private class TransformNameListWrapper
         {
-            private Transform rootTransform;
+            private Transform _rootTransform;
             public bool Active;
             private string _addBoneText;
             public string AddBoneText
@@ -1153,19 +1194,14 @@ namespace DynamicBoneDistributionEditor
             }
             
             public Vector2 Scroll { get; set; }
-            
-            public bool AddBoneTextValid
-            {
-                get
-                {
-                    Transform f = rootTransform.Find(AddBoneText);
-                    return f;
-                }
-            }
 
-            public StringListWrapper(Transform rootTransform)
+            public List<string> transformSuggestions = new List<string>();
+
+            public bool ShowHelp;
+
+            public TransformNameListWrapper(Transform rootTransform)
             {
-                this.rootTransform = rootTransform;
+                this._rootTransform = rootTransform;
                 Active = false;
                 _addBoneText = "";
             }
@@ -1173,9 +1209,18 @@ namespace DynamicBoneDistributionEditor
             private void SetText(string text)
             {
                 _addBoneText = text;
+                TransformNameSuggestions();
             }
-            
-            
+
+            private void TransformNameSuggestions()
+            {
+                transformSuggestions.Clear();
+                if (_addBoneText.IsNullOrEmpty()) return;
+                var list = new List<GameObject>();
+                _rootTransform.FindLoopAll(list);
+                transformSuggestions.Clear();
+                transformSuggestions.AddRange(list.Select(x => _rootTransform.GetPathToChild(x.transform)).Where(name => !name.IsNullOrEmpty() && name.IndexOf(_addBoneText, StringComparison.OrdinalIgnoreCase) >= 0).Take(5).ToList());
+            }
         }
     }
 }

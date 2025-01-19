@@ -4,9 +4,9 @@ using System.Linq;
 using ADV.Commands.Base;
 using JetBrains.Annotations;
 
-namespace KK.DynamicBoneDistributionEditor
+namespace DynamicBoneDistributionEditor
 {
-    public struct EditableList<T> : IList<T>
+    public class EditableList<T> : IList<T>
     {
         private readonly List<T> _list;
         private readonly List<T> _orgList;
@@ -22,6 +22,13 @@ namespace KK.DynamicBoneDistributionEditor
             else if (!_orgList.SequenceEqual(_list)) IsEdited = true;
         }
 
+        public EditableList()
+        {
+            _list = new List<T>();
+            _orgList = new List<T>();
+            IsEdited = false;
+        }
+        
         public EditableList(T item)
         {
             _list = new List<T> {item};
