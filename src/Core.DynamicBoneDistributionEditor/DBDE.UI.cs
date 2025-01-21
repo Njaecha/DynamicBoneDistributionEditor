@@ -802,7 +802,7 @@ namespace DynamicBoneDistributionEditor
                     if (!editableList.ContainsOriginal(bone)) GUI.color = Color.magenta;
                     GUILayout.TextField(bone, new GUIStyle(GUI.skin.box){ alignment = TextAnchor.UpperLeft, wordWrap = true}, GUILayout.MaxWidth(windowRect.width * 4 / 7)); 
                     GUI.color = guic;
-                    if (GUILayout.Button(new GUIContent("-", $"Remove {bone} from {controlName} List"), GUILayout.MinWidth(25), GUILayout.ExpandHeight(true)))
+                    if (GUILayout.Button(new GUIContent("-", $"Remove {bone} from {controlName} List"),new GUIStyle(GUI.skin.button){stretchHeight = true}, GUILayout.MinWidth(25)))
                     {
                         markedForRemoval.Add(bone);
                     }
