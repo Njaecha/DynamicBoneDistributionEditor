@@ -75,9 +75,9 @@ namespace DynamicBoneDistributionEditor
         
         
         // un-editable values that are only required for Multi-Bone fix
-        private readonly Vector3 _localGravity;
-        private readonly List<DynamicBoneCollider> _colliders;
-        private readonly List<DynamicBone.Particle> _particles;
+        private Vector3 _localGravity;
+        private List<DynamicBoneCollider> _colliders;
+        private List<DynamicBone.Particle> _particles;
 
         private bool _initialActive;
         private bool _active;
@@ -161,9 +161,7 @@ namespace DynamicBoneDistributionEditor
             _initialActive = _active = dbs.Any(b => b.enabled);
             
             // values for multi bone fix
-            _colliders = db.m_Colliders;
-            _localGravity = db.m_LocalGravity;
-            _particles = db.m_Particles;
+            ReferMultiBoneFixToDynamicBone(db);
             
             this.distributions = new EditableValue<Keyframe[]>[]
             {
@@ -208,10 +206,8 @@ namespace DynamicBoneDistributionEditor
             _initialActive = _active = dbs.Any(b => b.enabled);
             
             // values for multi bone fix
-            _colliders = db.m_Colliders;
-            _localGravity = db.m_LocalGravity;
-            _particles = db.m_Particles;
-            
+            ReferMultiBoneFixToDynamicBone(db);
+
             this.distributions = new EditableValue<Keyframe[]>[]
 			{
 				new EditableValue<Keyframe[]>(db.m_DampingDistrib == null ? GetDefaultCurveKeyframes() : db.m_DampingDistrib.keys.Length >= 2 ? db.m_DampingDistrib.keys : GetDefaultCurveKeyframes()),
@@ -332,6 +328,13 @@ namespace DynamicBoneDistributionEditor
             MultiBoneFix();
             ApplyAll();
             if (notRollsEcxlusionsLoaded) ApplyNotRollsAndExclusions();
+        }
+
+        private void ReferMultiBoneFixToDynamicBone(DynamicBone db)
+        {
+            _colliders = db.m_Colliders;
+            _localGravity = db.m_LocalGravity;
+            _particles = db.m_Particles;
         }
 
         internal void ReferToDynamicBone()
@@ -523,6 +526,7 @@ namespace DynamicBoneDistributionEditor
             db.ResetParticlesPosition(); // reset particle positions so that all particles are in their initial positions
             db.ApplyParticlesToTransforms(); // apply the reset particle positions to all transforms
             db.SetupParticles(); // ReSetup; this also sets the initial positions of the particles, hence the above
+            ReferMultiBoneFixToDynamicBone(db);
             MultiBoneFix(); // copy new values to other DynamicBones.
         }
         
@@ -532,6 +536,13 @@ namespace DynamicBoneDistributionEditor
         internal void MultiBoneFix()
         {
             if (DynamicBones.IsNullOrEmpty()) return;
+            
+            // particle fix
+            if (_particles.Count > 1 && !_particles[0].m_Transform && _particles.All(p => !p.m_Transform))
+            {
+                ReferMultiBoneFixToDynamicBone(PrimaryDynamicBone);
+            }
+            
             foreach (DynamicBone db in DynamicBones)
             {
                 db.m_notRolls = NotRollsTransforms;

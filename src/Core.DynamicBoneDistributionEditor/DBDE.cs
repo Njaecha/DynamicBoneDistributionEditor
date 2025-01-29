@@ -32,7 +32,7 @@ namespace DynamicBoneDistributionEditor
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "1.5.0";
+        public const string Version = "1.5.1";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
