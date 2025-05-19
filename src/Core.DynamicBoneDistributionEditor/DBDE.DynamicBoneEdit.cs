@@ -538,7 +538,7 @@ namespace DynamicBoneDistributionEditor
             if (DynamicBones.IsNullOrEmpty()) return;
             
             // particle fix
-            if (_particles.Count > 1 && !_particles[0].m_Transform && _particles.All(p => !p.m_Transform))
+            if (_particles.Count > 0 && !_particles[0].m_Transform && _particles.All(p => !p.m_Transform))
             {
                 ReferMultiBoneFixToDynamicBone(PrimaryDynamicBone);
             }
