@@ -22,10 +22,10 @@ namespace DynamicBoneDistributionEditor
 {
     public class DBDECharaController : CharaCustomFunctionController
     {
-        internal Dictionary<int, List<DBDEDynamicBoneEdit>> DistributionEdits = new Dictionary<int, List<DBDEDynamicBoneEdit>>();
+        internal readonly Dictionary<int, List<DBDEDynamicBoneEdit>> DistributionEdits = new Dictionary<int, List<DBDEDynamicBoneEdit>>();
 
         // <outfit, [accessory edits, normal edits, DBE-Data]>
-        internal Dictionary<int, List<object>> DistributionEditsNotLoaded = new Dictionary<int, List<object>>();
+        internal readonly Dictionary<int, List<object>> DistributionEditsNotLoaded = new Dictionary<int, List<object>>();
 
         // used to transfer plugin data from Coordinate Load Options temp character to the real characters.
         private static PluginData cloTransferPluginData; // for DBDE
@@ -110,14 +110,14 @@ namespace DynamicBoneDistributionEditor
                 List<KeyValuePair<string, byte[]>> normalEdits = new List<KeyValuePair<string, byte[]>>();
                 foreach (DBDEDynamicBoneEdit edit in DistributionEdits[key])
                 {
-                    if (!edit.IsEdited()) continue;
+                    // if (!edit.IsEdited()) continue; because of baking save all edits.
                     if (edit.ReidentificationData is KeyValuePair<int, string> rData)
                     {
-                        accessoryEdits.Add(new KeyValuePair<KeyValuePair<int, string>, byte[]>(rData, edit.Serialise()));
+                        accessoryEdits.Add(new KeyValuePair<KeyValuePair<int, string>, byte[]>(rData, edit.SerialiseAll()));
                     }
                     if (edit.ReidentificationData is string name)
                     {
-                        normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.Serialise()));
+                        normalEdits.Add(new KeyValuePair<string, byte[]>(name, edit.SerialiseAll()));
                     }
                 }
                 if (!accessoryEdits.IsNullOrEmpty()) ACC[key] = accessoryEdits;
@@ -162,7 +162,7 @@ namespace DynamicBoneDistributionEditor
             OnCoordinateBeingLoaded(ChaControl.nowCoordinate);
         }
 
-        internal IEnumerator removeCloTransferPluginData()
+        internal IEnumerator RemoveCloTransferPluginData()
         {
             yield return null;
             yield return null;
@@ -176,7 +176,7 @@ namespace DynamicBoneDistributionEditor
         /// <param name="loadAccessories">Should AccessoryData be loaded? Default: True</param>
         /// <param name="cMode">Is CoordinateLoadOption being used? Default: False</param>
         /// <param name="cloImportAccessories">The accessoriesSlots that should be loaded. Default: EmptyList</param>
-        private void checkCoordinateLoadOption(out bool loadAccessories, out bool cMode, out List<int> cloImportAccessories)
+        private void CheckCoordinateLoadOption(out bool loadAccessories, out bool cMode, out List<int> cloImportAccessories)
         {
             loadAccessories = true;
             cMode = false;
@@ -235,7 +235,7 @@ namespace DynamicBoneDistributionEditor
         protected override void OnCoordinateBeingLoaded(ChaFileCoordinate coordinate)
         {
             IsLoading = true;
-            checkCoordinateLoadOption(out bool loadAccessories, out bool cMode, out List<int> cloImportAccessories);
+            CheckCoordinateLoadOption(out bool loadAccessories, out bool cMode, out List<int> cloImportAccessories);
 
             // Maker partial coordinate load fix
             if (MakerAPI.InsideAndLoaded)
@@ -263,7 +263,7 @@ namespace DynamicBoneDistributionEditor
                     if (cloTransferPluginData != null)
                     {
                         // remove transfer plugindata after load is finished; Coroutine cannot be started on *this* as it's being destroyed by clo too early
-                        DBDE.Instance.StartCoroutine(removeCloTransferPluginData());
+                        DBDE.Instance.StartCoroutine(RemoveCloTransferPluginData());
                     }
                 }
 
@@ -278,7 +278,7 @@ namespace DynamicBoneDistributionEditor
                     DBDE.Logger.LogDebug("Setting DBE TransferData");
                     if (cloTransferPluginDataDBE != null)
                     {
-                        DBDE.Instance.StartCoroutine(removeCloTransferPluginData());
+                        DBDE.Instance.StartCoroutine(RemoveCloTransferPluginData());
                     }
                 }
             }
@@ -289,7 +289,7 @@ namespace DynamicBoneDistributionEditor
             }
             #endregion
 
-            // at this point we should have DBDE Data and/or DBE Data from either the Outfit being loaded or transfered from the DummyCharacter
+            // at this point we should have DBDE Data and/or DBE Data from either the Outfit being loaded or transferred from the DummyCharacter
 
             if (data == null && DBE_data == null) return;
 
@@ -331,7 +331,7 @@ namespace DynamicBoneDistributionEditor
             List<KeyValuePair<string, byte[]>> normalEdits = new List<KeyValuePair<string, byte[]>>();
             foreach(DBDEDynamicBoneEdit edit in DistributionEdits[ChaControl.fileStatus.coordinateType])
             {
-                if (!edit.IsEdited()) continue;
+                // if (!edit.IsEdited()) continue;
                 if (edit.ReidentificationData is KeyValuePair<int, string> rData)
                 {
                     accessoryEdits.Add(new KeyValuePair<KeyValuePair<int, string>, byte[]>(rData, edit.Serialise()));
@@ -392,9 +392,10 @@ namespace DynamicBoneDistributionEditor
                 foreach (var edit in DistributionEdits[ChaControl.fileStatus.coordinateType])
                 {
                     DynamicBone db = clothDBs.Find(b => b.m_Root.name == edit.PrimaryDynamicBone.m_Root.name);
-                    if (db != null)
+                    if (db)
                     {
                         edit.ReferInitialsToDynamicBone(db);
+                        edit.ApplyAll();
                     }
                     edit.UpdateActiveStack();
                 }
@@ -429,12 +430,42 @@ namespace DynamicBoneDistributionEditor
             DBDE.UI.UpdateUIWhileOpen = true;
         }
 
-        
-
         public int LoadIgnoreFrameCount = 3;
 
         private IEnumerator LoadData(int outfit, List<KeyValuePair<KeyValuePair<int, string>, byte[]>> accessoryEdits, List<KeyValuePair<string, byte[]>> normalEdits, List<DynamicBoneData> DBE_Data, bool outfitLoad = false)
         {
+            void NewAccessoryEditWithoutDBEData(KeyValuePair<KeyValuePair<int, string>, byte[]> x)
+            {
+                var sEditL = MessagePackSerializer.Deserialize<List<byte[]>>(x.Value);
+                if (sEditL.Count > 1) // Old serialisation format
+                {
+                    DBDE.Logger.LogVerbose($"Creating new Accessory Dynamic Bone Edit for Outfit={outfit} Slot={x.Key.Key} BoneName={x.Key.Value.Split('/').Last()} using OLD FORMAT");
+                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key.Value, x.Key.Key), new DBDEDynamicBoneEdit.EditHolder(this), x.Value) { ReidentificationData = x.Key });
+                }
+                else
+                {
+                    DBDE.Logger.LogVerbose($"Creating new Accessory Dynamic Bone Edit for Outfit={outfit} Slot={x.Key.Key} BoneName={x.Key.Value.Split('/').Last()} using NEW FORMAT");
+                    SerialisedEdit sEdit = MessagePackSerializer.Deserialize<SerialisedEdit>(sEditL.First());
+                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key.Value, x.Key.Key), new DBDEDynamicBoneEdit.EditHolder(this), sEdit) { ReidentificationData = x.Key }); 
+                }
+            }
+            
+            void NewNormalEditWithoutDBEData(KeyValuePair<string, byte[]> x)
+            {
+                var sEditL = MessagePackSerializer.Deserialize<List<byte[]>>(x.Value);
+                if (sEditL.Count > 1) // Old serialisation format
+                {
+                    DBDE.Logger.LogVerbose($"Creating new Body Dynamic Bone Edit for Outfit={outfit} BoneName={x.Key.Split('/').Last()} using OLD FORMAT");
+                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key), new DBDEDynamicBoneEdit.EditHolder(this), x.Value) { ReidentificationData = x.Key });
+                }
+                else
+                {
+                    DBDE.Logger.LogVerbose($"Creating new Body Dynamic Bone Edit for Outfit={outfit} BoneName={x.Key.Split('/').Last()} using NEW FORMAT");
+                    SerialisedEdit sEdit = MessagePackSerializer.Deserialize<SerialisedEdit>(sEditL.First());
+                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key), new DBDEDynamicBoneEdit.EditHolder(this), sEdit) { ReidentificationData = x.Key }); 
+                }
+            }
+            
             while (IsLoading) yield return null;
 
             if (KKAPI.Studio.StudioAPI.InsideStudio)
@@ -452,11 +483,12 @@ namespace DynamicBoneDistributionEditor
             {
                 if (!accessoryEdits.IsNullOrEmpty())
                 {
-                    foreach(var x in accessoryEdits)
+                    DBDE.Logger.LogVerbose("Loading Accessories");
+                    foreach(KeyValuePair<KeyValuePair<int, string>, byte[]> x in accessoryEdits)
                     {
                         // remove old Edit so that new one can take its place but keep remaining edits
                         if (!DistributionEdits[outfit].IsNullOrEmpty()) DistributionEdits[outfit].RemoveAll(d => d.ReidentificationData.Equals(x.Key)); 
-                        if (DBE_Data != null)
+                        if (DBE_Data != null) // If DBE Data available
                         {
                             // find DynamicBoneData for this accessory
                             List<DynamicBoneData> searchResults = DBE_Data.FindAll(data => outfit == data.CoordinateIndex && x.Key.Key == data.Slot && x.Key.Value.EndsWith(data.BoneName));
@@ -465,20 +497,32 @@ namespace DynamicBoneDistributionEditor
                             
                             if (!searchResults.IsNullOrEmpty()) // if something was found
                             {
-                                DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key.Value, x.Key.Key), x.Value, searchResults[0]) { ReidentificationData = x.Key }); // new Edit with DBE data
+                                var sEditL = MessagePackSerializer.Deserialize<List<byte[]>>(x.Value);
+                                if (sEditL.Count > 1) // old if data has old format. New format will not load both at the same time.
+                                {
+                                    DBDE.Logger.LogVerbose($"Creating new Accessory Dynamic Bone Edit for Outfit={outfit} Slot={x.Key.Key} BoneName={x.Key.Value.Split('/').Last()} using OLD FORMAT | WITH DBE DATA");
+                                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key.Value, x.Key.Key), new DBDEDynamicBoneEdit.EditHolder(this), x.Value, searchResults[0]) { ReidentificationData = x.Key }); // new Edit with DBE data
+                                }
+                                else // new format should already have everything the DBE contains
+                                {
+                                    DBDE.Logger.LogVerbose($"Creating new Accessory Dynamic Bone Edit for Outfit={outfit} Slot={x.Key.Key} BoneName={x.Key.Value.Split('/').Last()} using NEW FORMAT");
+                                    SerialisedEdit sEdit = MessagePackSerializer.Deserialize<SerialisedEdit>(sEditL.First());
+                                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key.Value, x.Key.Key), new DBDEDynamicBoneEdit.EditHolder(this), sEdit) { ReidentificationData = x.Key });
+                                }
                                 DBE_Data.RemoveAll(searchResults.Contains); // remove from list because we already loaded the edit here
                             }
-                            else DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key.Value, x.Key.Key), x.Value) { ReidentificationData = x.Key }); // new Edit without DBE data
+                            else NewAccessoryEditWithoutDBEData(x);
                         }
-                        else DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key.Value, x.Key.Key), x.Value) { ReidentificationData = x.Key }); // new Edit without DBE data
+                        else NewAccessoryEditWithoutDBEData(x);
                     }
                 }
-                if (!DBE_Data.IsNullOrEmpty()) // if DBE data still contains entries that havent been loaded together with DBDE data, create Edits for them
+                if (!DBE_Data.IsNullOrEmpty()) // if DBE data still contains entries that haven't been loaded together with DBDE data, create Edits for them
                 {
+                    DBDE.Logger.LogVerbose("Loading DBE Data");
                     foreach (var data in DBE_Data.Where(data => data.CoordinateIndex == outfit))
                     {
                         // try to find the bone that DynamicBoneEditor meant
-                        List<DynamicBone> foundDBs = ChaControl.GetAccessoryComponent(data.Slot)?.GetComponentsInChildren<DynamicBone>(true)?.ToList().FindAll(db => db.m_Root != null && db.m_Root.name == data.BoneName);
+                        List<DynamicBone> foundDBs = ChaControl.GetAccessoryComponent(data.Slot)?.GetComponentsInChildren<DynamicBone>(true)?.ToList().FindAll(db => db.m_Root && db.m_Root.name == data.BoneName);
                         if (foundDBs.IsNullOrEmpty())
                         {
                             DBDE.Logger.LogWarning($"Found zero DynamicBones matching Name={data.BoneName} on Slot {data.Slot}  (Outfit {outfit}). Skipping enrty.");
@@ -490,18 +534,23 @@ namespace DynamicBoneDistributionEditor
                         string qName = foundDBs[0].GetAccessoryQualifiedName();
                         // remove old Edit so that new one can take its place but keep remaining edits
                         if (!DistributionEdits[outfit].IsNullOrEmpty()) DistributionEdits[outfit].RemoveAll(d => d.ReidentificationData is KeyValuePair<int, string> kvp && kvp.Key == slot && kvp.Value == qName);
-                        if (qName.IsNullOrEmpty()) DBDE.Logger.LogError($"Couldn't retrive Accessory Qualified Name for DynamicBone with BasicName={data.BoneName} on Slot {data.Slot}  (Outfit {outfit}). Skipping Entry.");
-                        else DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(qName, slot), null, data) { ReidentificationData = new KeyValuePair<int, string>(slot, qName) }); // new Edit with only DBE data
+                        if (qName.IsNullOrEmpty()) DBDE.Logger.LogError($"Couldn't retrieve Accessory Qualified Name for DynamicBone with BasicName={data.BoneName} on Slot {data.Slot}  (Outfit {outfit}). Skipping Entry.");
+                        else 
+                        {
+                            DBDE.Logger.LogVerbose($"Creating new Accessory Dynamic Bone Edit for Outfit={outfit} Slot={data.Slot} BoneName={data.BoneName} using OLD FORMAT | ONLY DBE DATA");
+                            DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(qName, slot), new DBDEDynamicBoneEdit.EditHolder(this), null, data) { ReidentificationData = new KeyValuePair<int, string>(slot, qName) }); // new Edit with only DBE data
+                        }
                     }
                 }
             }
             if (normalEdits != null)
             {
-                foreach(var x in normalEdits)
+                DBDE.Logger.LogVerbose("Loading Normal Edits");
+                foreach(KeyValuePair<string, byte[]> x in normalEdits)
                 {
                     // remove old Edit so that new one can take its place but keep remaining edits
                     if (!DistributionEdits[outfit].IsNullOrEmpty()) DistributionEdits[outfit].RemoveAll(d => d.ReidentificationData.Equals(x.Key));
-                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(x.Key), x.Value) { ReidentificationData = x.Key });
+                    NewNormalEditWithoutDBEData(x);
                 }
             }
 
@@ -516,9 +565,9 @@ namespace DynamicBoneDistributionEditor
         {
             _dynamicBoneCache.Clear();
             RefreshBoneList("Accessory Changed");
-            if (DistributionEdits.ContainsKey(ChaControl.fileStatus.coordinateType))
+            if (DistributionEdits.TryGetValue(ChaControl.fileStatus.coordinateType, out List<DBDEDynamicBoneEdit> distributionEdit))
             {
-                foreach (var edit in DistributionEdits[ChaControl.fileStatus.coordinateType])
+                foreach (var edit in distributionEdit)
                 {
                     edit.UpdateActiveStack(true);
                     //edit.MultiBoneFix();
@@ -547,8 +596,8 @@ namespace DynamicBoneDistributionEditor
                 int newSlot = destination;
                 // find according DBDE Data on the source accessory
                 DBDEDynamicBoneEdit sourceEdit = DistributionEdits[ChaControl.fileStatus.coordinateType].Find(dbde => dbde.ReidentificationData is KeyValuePair<int, string> kvp && kvp.Key == source && kvp.Value == name);
-                // add new DBDE Data for DynamicBone on the destitination accessory, whilees; copying the DBDE data. 
-                DistributionEdits[ChaControl.fileStatus.coordinateType].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(name, newSlot), sourceEdit) { ReidentificationData = new KeyValuePair<int, string>(newSlot, name) });
+                // add new DBDE Data for DynamicBone on the destination accessory, while copying the DBDE data. 
+                DistributionEdits[ChaControl.fileStatus.coordinateType].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(name, newSlot), new DBDEDynamicBoneEdit.EditHolder(this), sourceEdit, false) { ReidentificationData = new KeyValuePair<int, string>(newSlot, name) });
                 sourceEdit.MultiBoneFix();
                 sourceEdit.ApplyAll();
             }
@@ -558,25 +607,34 @@ namespace DynamicBoneDistributionEditor
 
         internal void AccessoryCopiedEvent(int sourceOutfit, int destinationOutfit, IEnumerable<int> slots)
         {
+            if (!DistributionEdits.ContainsKey(sourceOutfit))return;
             StartCoroutine(AccessoryCopiedDelayed(sourceOutfit, destinationOutfit,slots));
         }
 
         private IEnumerator AccessoryCopiedDelayed(int sourceOutfit, int destinationOutfit, IEnumerable<int> slots)
         {
             DBDE.UI.UpdateUIWhileOpen = false;
-            yield return null;
-            yield return null;
+            if (KKAPI.KoikatuAPI.GetCurrentGameMode() != GameMode.Studio)
+            {
+                yield return null;
+                yield return null;
+            }
 
-            if (!DistributionEdits.ContainsKey(sourceOutfit)) yield break;
             if (!DistributionEdits.ContainsKey(destinationOutfit))
             {
                 DistributionEdits.Add(destinationOutfit, new List<DBDEDynamicBoneEdit>());
             }
+            // we have to remove edits from the destination that match the ReidentificationData, else the data will double.
+            List<KeyValuePair<int, string>> identDataBeingCopied = DistributionEdits[sourceOutfit]
+                .Where(edit => edit.ReidentificationData is KeyValuePair<int, string> kv && slots.Contains(kv.Key))
+                .Select(edit => edit.ReidentificationData is KeyValuePair<int, string> pair ? pair : default).ToList();
+            DistributionEdits[destinationOutfit].RemoveAll(edit => edit.ReidentificationData is KeyValuePair<int, string> kv && identDataBeingCopied.Any(ident => ident.Key == kv.Key && ident.Value == kv.Value));
+            
             DistributionEdits[sourceOutfit]
                 .Where(edit => edit.ReidentificationData is KeyValuePair<int, string> kv && slots.Contains(kv.Key)) // only Edits that match the copied slots
                 .ToList()
                 // add a new DBDEDynamicBoneEdit with the same accessor (slot stays the same), same identifier (slot) and the same values
-                .ForEach(edit => DistributionEdits[destinationOutfit].Add(new DBDEDynamicBoneEdit(edit.AccessorFunction, edit) { ReidentificationData = edit.ReidentificationData }));
+                .ForEach(edit => DistributionEdits[destinationOutfit].Add(new DBDEDynamicBoneEdit(edit.AccessorFunction, new DBDEDynamicBoneEdit.EditHolder(this), edit, false) { ReidentificationData = edit.ReidentificationData }));
             
             StartCoroutine(RefreshBoneListDelayed());
             DBDE.UI.UpdateUIWhileOpen = true;
@@ -615,7 +673,7 @@ namespace DynamicBoneDistributionEditor
 
             // for non accessory dynamic bones
             List<KeyValuePair<string, DynamicBone>> nonAccDBs = ChaControl.GetComponentsInChildren<DynamicBone>(true)
-                .Where(db => db.GetComponentsInParent<ChaAccessoryComponent>(true).IsNullOrEmpty() && db.TryGetChaControlQualifiedName(out _) && db.m_Root != null )
+                .Where(db => db.GetComponentsInParent<ChaAccessoryComponent>(true).IsNullOrEmpty() && db.TryGetChaControlQualifiedName(out _) && db.m_Root )
                 .Select(db => new KeyValuePair<string, DynamicBone>(db.GetChaControlQualifiedName(), db))
                 .GroupBy(pair => pair.Key)
                 .Select(group => group.First())
@@ -623,7 +681,7 @@ namespace DynamicBoneDistributionEditor
 
             nonAccDBs.Where(pair => !DistributionEdits[outfit].Any(a => a.ReidentificationData is string q && q==pair.Key))
                 .ToList().ForEach(pair => {
-                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(pair.Key)) { ReidentificationData = pair.Key }); 
+                    DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(pair.Key), new DBDEDynamicBoneEdit.EditHolder(this)) { ReidentificationData = pair.Key }); 
                 });
 
             // for accessory dynamic bones
@@ -631,7 +689,7 @@ namespace DynamicBoneDistributionEditor
             {
                 int slot = i;
                 ChaAccessoryComponent accs = ChaControl.GetAccessoryComponent(slot);
-                if (accs != null)
+                if (accs)
                 {
                     // get all dynamic bones under that accessory
                     List<DynamicBone> dynamicBones = accs.GetComponentsInChildren<DynamicBone>(true).ToList();
@@ -639,7 +697,7 @@ namespace DynamicBoneDistributionEditor
                     // get all dynamic bones that have their m_Root located under that accessory (normal)
                     List<DynamicBone> aDynamicBones = dynamicBones
                         .Where(db =>
-                            db.m_Root != null
+                            db.m_Root
                             && db.TryGetAccessoryQualifiedName(out string name)
                             && !name.IsNullOrEmpty()
                         ).ToList();
@@ -655,14 +713,14 @@ namespace DynamicBoneDistributionEditor
                         // add DBDEs for those remaining
                         aDynamicBonesFiltered.ForEach(nameAndDB =>
                         {
-                            DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(nameAndDB.Key, slot)) { ReidentificationData = new KeyValuePair<int, string>(slot, nameAndDB.Key) });
+                            DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(nameAndDB.Key, slot), new DBDEDynamicBoneEdit.EditHolder(this)) { ReidentificationData = new KeyValuePair<int, string>(slot, nameAndDB.Key) });
                         });
                     }
 
                     // get all dynamic bones that have their m_Root located somewhere else (c2a accessories)
                     List<DynamicBone> nDynamicBones = dynamicBones
                         .Where( db =>
-                            db.m_Root != null
+                            db.m_Root
                             && db.TryGetChaControlQualifiedName(out string name)
                             && !name.IsNullOrEmpty()
                         ).ToList();
@@ -677,7 +735,7 @@ namespace DynamicBoneDistributionEditor
                         // add DBDEs for those remaining
                         nDynamicBonesFiltered.ForEach(nameAndDB =>
                         {
-                            DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(nameAndDB.Key)) { ReidentificationData = nameAndDB.Key });
+                            DistributionEdits[outfit].Add(new DBDEDynamicBoneEdit(() => WouldYouBeSoKindTohandMeTheDynamicBonePlease(nameAndDB.Key), new DBDEDynamicBoneEdit.EditHolder(this)) { ReidentificationData = nameAndDB.Key });
                         });
                     }
                 }
@@ -686,7 +744,7 @@ namespace DynamicBoneDistributionEditor
 
             // == remove DBDEDynamicBoneEdits whose dynamic bones could not be found anymore.
             if (removeDeadOnes) DistributionEdits[outfit].RemoveAll(a => {
-                if (a.DynamicBones.IsNullOrEmpty() || a.DynamicBones.All(d => d == null))
+                if (a.DynamicBones.IsNullOrEmpty() || a.DynamicBones.All(d => !d))
                 {
                     string print = "";
                     if (a.ReidentificationData is KeyValuePair<int, string> acc) print = $"{acc.Key} -> {acc.Value}";
@@ -696,7 +754,7 @@ namespace DynamicBoneDistributionEditor
                 }
                 else
                 {
-                    if (a.DynamicBones.Any(d => d == null)) _dynamicBoneCache.Clear(); // dead bone stuck in cache
+                    if (a.DynamicBones.Any(d => !d)) _dynamicBoneCache.Clear(); // dead bone stuck in cache
                 }
                 return false;
             });

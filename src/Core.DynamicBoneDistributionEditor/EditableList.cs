@@ -140,5 +140,12 @@ namespace DynamicBoneDistributionEditor
         {
             return value._list;
         }
+
+        public void SetCurrentAsInitial()
+        {
+            _orgList.Clear();
+            _orgList.AddRange(_list);
+            IsEdited = false;
+        }
     }
 }

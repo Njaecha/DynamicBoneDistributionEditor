@@ -7,7 +7,7 @@ namespace DynamicBoneDistributionEditor
 {
     public struct EditableValue<T>
     {
-        private readonly T _orgValue;
+        private T _orgValue;
         private T _value;
 
         public T value
@@ -45,6 +45,12 @@ namespace DynamicBoneDistributionEditor
 
         public void Reset()
         {
+            this.IsEdited = false;
+        }
+
+        public void SetCurrentAsInitial()
+        {
+            this._orgValue = this._value;
             this.IsEdited = false;
         }
 

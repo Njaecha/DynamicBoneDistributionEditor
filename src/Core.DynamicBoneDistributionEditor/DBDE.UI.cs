@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using ADV.Commands.Base;
 using AnimationCurveEditor;
 using KKAPI.Maker;
@@ -9,6 +10,7 @@ using static AnimationCurveEditor.AnimationCurveEditor;
 using static AnimationCurveEditor.AnimationCurveEditor.KeyframeEditedArgs;
 using static Illusion.Utils;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using IllusionUtility.GetUtility;
 using DynamicBoneDistributionEditor;
@@ -94,6 +96,8 @@ namespace DynamicBoneDistributionEditor
         public DBDECharaController referencedChara = null;
 
         public bool UpdateUIWhileOpen = true;
+
+        private bool bakeMode = false;
         
         void Start()
         {
@@ -168,6 +172,8 @@ namespace DynamicBoneDistributionEditor
 
         private void OnGUI()
         {
+            Baker.OnGui();
+            
             AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
             if (KKAPI.KoikatuAPI.GetCurrentGameMode() == GameMode.Maker && !CanShow())
             {
@@ -201,7 +207,6 @@ namespace DynamicBoneDistributionEditor
                 _beenHiddenForFrames = 0;
                 Close();
             }
-
         }
 
         private Rect lastUsedAceRect = new Rect(Screen.width / 2, Screen.height / 2, 500, 300);
@@ -317,9 +322,13 @@ namespace DynamicBoneDistributionEditor
                 Close();
                 return;
             }
-            if (GUI.Button(new Rect(1,1, 90, 15), new GUIContent(DBDE.drawGizmos.Value ? "Gizmos ON" : "Gismos OFF", "Toggle Gizmos.\nBlue arrow: Gravity.\nRed arrow: Force.\nGreen arrow: Applied force")))
+            if (GUI.Button(new Rect(1,1, 90, 15), new GUIContent(DBDE.drawGizmos.Value ? "Gizmos ON" : "Gizmos OFF", "Toggle Gizmos.\nBlue arrow: Gravity.\nRed arrow: Force.\nGreen arrow: Applied force")))
             {
                 DBDE.drawGizmos.Value = !DBDE.drawGizmos.Value;
+            }
+            if (GUI.Button(new Rect(95,1, 90, 15), new GUIContent(bakeMode ? "Bake ON" : "Bake OFF", "Toggle BakeMode.\nBakeMode lets you set the current value as the initial value.")))
+            {
+                bakeMode = !bakeMode;
             }
 
             GUI.Box(new Rect(new Vector2(5, 20), new Vector2(windowRect.width / 6 * 2 + 5, windowRect.height - 25)), "");
@@ -377,9 +386,9 @@ namespace DynamicBoneDistributionEditor
                 // fix gizmo showing the wrong bone in some cases
                 if (!Editing.Equals(Camera.main.GetComponent<DBDEGizmoController>()?.Editing)) SetCurrentRightSide(currentIndex);
 
-                if (UpdateUIWhileOpen && (referencedChara == null || !referencedChara.IsLoading))
+                if (UpdateUIWhileOpen && (!referencedChara || !referencedChara.IsLoading))
                 {
-                    Editing.ReferToDynamicBone();
+                    Editing.ReferToDynamicBone(fromUI:true);
                     gravityWrapper.SetForVector(Editing.gravity.value);
                     forceWrapper.SetForVector(Editing.force.value);
                 }
@@ -394,13 +403,27 @@ namespace DynamicBoneDistributionEditor
                     bool noShake = MakerAPI.GetCharacterControl().nowCoordinate.accessory.parts[kvp.Key].noShake;
                     if (noShake) GUI.enabled = false;
                 }
-                if (Editing.IsActiveEdited()) GUI.color = Color.magenta;
-                if (GUILayout.Button(new GUIContent(Editing.active ? "ON" : "OFF", "Toggle DynamicBone"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
+
+                if (!bakeMode)
                 {
-                    Editing.active = !Editing.active;
+                    if (Editing.IsActiveEdited()) GUI.color = Color.magenta;
+                    if (GUILayout.Button(new GUIContent(Editing.active ? "ON" : "OFF", "Toggle DynamicBone"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
+                    {
+                        Editing.active = !Editing.active;
+                    }
+                    GUI.color = guic;
+                    GUI.enabled = true;
                 }
-                GUI.color = guic;
-                GUI.enabled = true;
+                else
+                {
+                    GUI.color = Color.yellow;
+                    if (GUILayout.Button(new GUIContent("B", "Bake Active State"), buttonStyle, GUILayout.Width(30), GUILayout.Height(25)))
+                    {
+                        Baker.StartBaker(Editing.BakeActive, "Active State ("+ (Editing.active ? "enabled" : "disabled") +")");
+                    }
+                    GUI.color = guic;
+                }
+                
                 GUILayout.EndHorizontal();
                 #endregion
 
@@ -435,14 +458,27 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -2, Editing.freezeAxis.value);
                     }
                 }
-                if (Editing.freezeAxis.IsEdited) GUI.color = Color.magenta;
-                else GUI.enabled = false;
-                if (GUILayout.Button(new GUIContent("R", $"Reset FreezeAxis"), GUILayout.Width(25)))
+
+                if (!bakeMode)
                 {
-                    Editing.freezeAxis.Reset();
-                    Editing.ApplyFreezeAxis();
+                    if (Editing.freezeAxis.IsEdited) GUI.color = Color.magenta;
+                    else GUI.enabled = false;
+                    if (GUILayout.Button(new GUIContent("R", $"Reset FreezeAxis"), GUILayout.Width(25)))
+                    {
+                        Editing.freezeAxis.Reset();
+                        Editing.ApplyFreezeAxis();
+                    }
+                    GUI.enabled = true; GUI.color = guic;
                 }
-                GUI.enabled = true; GUI.color = guic;
+                else
+                {
+                    GUI.color = Color.yellow;
+                    if (GUILayout.Button(new GUIContent("B", $"Bake FreezeAxis"), GUILayout.Width(25)))
+                    {
+                        Baker.StartBaker(Editing.BakeFreezeAxis, "Freeze Axis");
+                    }
+                    GUI.color = guic;
+                }
 
                 GUILayout.EndHorizontal();
                 GUILayout.Space(5);
@@ -490,15 +526,28 @@ namespace DynamicBoneDistributionEditor
                         Clipboard = new ClipboardEntry(currentIndex, -3, Editing.weight.value);
                     }
                 }
-                if (Editing.weight.IsEdited) GUI.color = Color.magenta;
-                else GUI.enabled = false;
-                if (GUILayout.Button(new GUIContent("R", $"Reset Weight"), GUILayout.Width(25)))
+
+                if (!bakeMode)
                 {
-                    Editing.ResetWeight();
-                    weightWrapper.Value = Editing.weight.value;
+                    if (Editing.weight.IsEdited) GUI.color = Color.magenta;
+                    else GUI.enabled = false;
+                    if (GUILayout.Button(new GUIContent("R", $"Reset Weight"), GUILayout.Width(25)))
+                    {
+                        Editing.ResetWeight();
+                        weightWrapper.Value = Editing.weight.value;
+                    }
+                    GUI.enabled = true;
+                    GUI.color = guic;
                 }
-                GUI.enabled = true;
-                GUI.color = guic;
+                else
+                {
+                    GUI.color = Color.yellow;
+                    if (GUILayout.Button(new GUIContent("B", $"Bake Weight"), GUILayout.Width(25)))
+                    {
+                        Baker.StartBaker(Editing.BakeWeight, "Weight");
+                    }
+                    GUI.color = guic;
+                }
                 
                 GUILayout.EndHorizontal();
                 // bottom
@@ -564,15 +613,29 @@ namespace DynamicBoneDistributionEditor
                             Clipboard = new ClipboardEntry(currentIndex, num, Editing.baseValues[num].value);
                         }
                     }
-                    if (Editing.baseValues[i].IsEdited) GUI.color = Color.magenta;
-                    else GUI.enabled = false;
-                    if (GUILayout.Button(new GUIContent("R", $"Reset {DistribKindNames[num]} Base Value"), GUILayout.Width(25)))
+
+                    if (!bakeMode)
                     {
-                        Editing.ResetBaseValues(i);
-                        BaseValueWrappers[i].Value = Editing.baseValues[i].value;
+                        if (Editing.baseValues[i].IsEdited) GUI.color = Color.magenta;
+                        else GUI.enabled = false;
+                        if (GUILayout.Button(new GUIContent("R", $"Reset {DistribKindNames[num]} Base Value"), GUILayout.Width(25)))
+                        {
+                            Editing.ResetBaseValues(i);
+                            BaseValueWrappers[i].Value = Editing.baseValues[i].value;
+                        }
+                        GUI.enabled = true;
+                        GUI.color = guic;
                     }
-                    GUI.enabled = true;
-                    GUI.color = guic;
+                    else
+                    {
+                        GUI.color = Color.yellow;
+                        if (GUILayout.Button(new GUIContent("B", $"Bake {DistribKindNames[num]} Base Value"), GUILayout.Width(25)))
+                        {
+                            int i1 = i;
+                            Baker.StartBaker( () => Editing.BakeValues(i1), $"{DistribKindNames[num]} Base Value");
+                        }
+                        GUI.color = guic;
+                    }
                     GUILayout.EndHorizontal();
                     // bottom
                     GUILayout.BeginHorizontal(GUILayout.Height(25));
@@ -613,19 +676,34 @@ namespace DynamicBoneDistributionEditor
                                 Clipboard = new ClipboardEntry(currentIndex, num, Editing.GetAnimationCurve((byte)num));
                             }
                         }
-                        if (Editing.distributions[i].IsEdited) GUI.color = Color.magenta;
-                        else GUI.enabled = false;
-                        if (GUILayout.Button(new GUIContent("R", $"Reset {DistribKindNames[num]} Distribution Curve"), GUILayout.Width(25)))
+
+                        if (!bakeMode)
                         {
-                            Editing.ResetDistribution(i);
-                            if (num == currentEdit)
+                            
+                            if (Editing.distributions[i].IsEdited) GUI.color = Color.magenta;
+                            else GUI.enabled = false;
+                            if (GUILayout.Button(new GUIContent("R", $"Reset {DistribKindNames[num]} Distribution Curve"), GUILayout.Width(25)))
                             {
-                                AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
-                                ace?.Init(Editing.GetAnimationCurve((byte)i), ace.rect, 2, 0, 0.5f);
+                                Editing.ResetDistribution(i);
+                                if (num == currentEdit)
+                                {
+                                    AnimationCurveEditor.AnimationCurveEditor ace = rCam.GetComponent<AnimationCurveEditor.AnimationCurveEditor>();
+                                    ace?.Init(Editing.GetAnimationCurve((byte)i), ace.rect, 2, 0, 0.5f);
+                                }
                             }
+                            GUI.enabled = true;
+                            GUI.color = guic;
                         }
-                        GUI.enabled = true;
-                        GUI.color = guic;
+                        else
+                        {
+                            GUI.color = Color.yellow;
+                            if (GUILayout.Button(new GUIContent("B", $"Bake {DistribKindNames[num]} Distribution"), GUILayout.Width(25)))
+                            {
+                                int i1 = i;
+                                Baker.StartBaker( () => Editing.BakeDistributions(i1), $"{DistribKindNames[num]} Distribution");
+                            }
+                            GUI.color = guic;
+                        }
                     }
                     GUILayout.EndHorizontal();
                     GUILayout.EndVertical();
@@ -635,11 +713,11 @@ namespace DynamicBoneDistributionEditor
                 }
                 #endregion
 
-                DrawVectorControl("Gravity", (a) => Editing.gravity.AxisEdited(a), gravityWrapper, ref Editing.gravity, Editing.ApplyGravity, Editing.ResetGravity);
+                DrawVectorControl("Gravity", (a) => Editing.gravity.AxisEdited(a), gravityWrapper, ref Editing.gravity, Editing.ApplyGravity, Editing.ResetGravity,  Editing.BakeGravity);
                 GUILayout.Space(5);
-                DrawVectorControl("Force", (a) => Editing.force.AxisEdited(a), forceWrapper, ref Editing.force, Editing.ApplyForce, Editing.ResetForce);
+                DrawVectorControl("Force", (a) => Editing.force.AxisEdited(a), forceWrapper, ref Editing.force, Editing.ApplyForce, Editing.ResetForce, Editing.BakeForce);
                 GUILayout.Space(5);
-                DrawVectorControl("EndOffset", (a) => Editing.endOffset.AxisEdited(a), endOffsetWrapper, ref Editing.endOffset, Editing.ApplyEndOffset, Editing.ResetEndOffset);
+                DrawVectorControl("EndOffset", (a) => Editing.endOffset.AxisEdited(a), endOffsetWrapper, ref Editing.endOffset, Editing.ApplyEndOffset, Editing.ResetEndOffset, Editing.BakeEndOffset);
                 if (GUILayout.Button(new GUIContent("Re-Setup Particles",
                         "Use this to rediscover dynamic bone particles. Needed for EndOffset changes to take effect.")))
                 {
@@ -663,7 +741,8 @@ namespace DynamicBoneDistributionEditor
                         {
                             Transform t = Editing.PrimaryDynamicBone.m_Root.Find(bone);
                             Editing.RemoveNotRoll(t);
-                        }
+                        } ,
+                    Editing.BakeNotRolls
                     );
 
                 #endregion
@@ -683,7 +762,8 @@ namespace DynamicBoneDistributionEditor
                     {
                         Transform t = Editing.PrimaryDynamicBone.m_Root.Find(bone);
                         Editing.RemoveExclusion(t);
-                    }
+                    },
+                    Editing.BakeExclusions
                 );
                 
                 #endregion
@@ -693,20 +773,34 @@ namespace DynamicBoneDistributionEditor
                 GUILayout.FlexibleSpace();
                 #region Right Side - Footer
                 GUILayout.BeginHorizontal(); // bone level buttons
-                if (Clipboard != null && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
+
+                if (!bakeMode)
                 {
-                    if (GUILayout.Button("Paste All"))
+                    if (Clipboard != null && Clipboard.data is DBDEDynamicBoneEdit copied) // draw Paste button
                     {
-                        Editing.PasteData(copied);
+                        if (GUILayout.Button("Paste All"))
+                        {
+                            Editing.PasteData(copied);
+                        }
+                    }
+                    else // draw Copy button
+                    {
+                        if (GUILayout.Button("Copy All"))
+                        {
+                            Clipboard = new ClipboardEntry(currentIndex, -1, Editing);
+                        }
                     }
                 }
-                else // draw Copy button
+                else
                 {
-                    if (GUILayout.Button("Copy All"))
+                    GUI.color = Color.yellow;
+                    if (GUILayout.Button(new GUIContent("Bake All", $"Bake All")))
                     {
-                        Clipboard = new ClipboardEntry(currentIndex, -1, Editing);
+                        Baker.StartBaker(() => Editing.BakeAll(), "All Settings");
                     }
+                    GUI.color = guic;
                 }
+                    
                 if (Editing.IsEdited()) GUI.color = Color.magenta;
                 else GUI.enabled = false;
                 if (GUILayout.Button("Reset All"))
@@ -742,7 +836,8 @@ namespace DynamicBoneDistributionEditor
             ref EditableList<string> editableList,
             Action resetFunc,
             Action<string> addBoneFunc,
-            Action<string> removeBoneFunc
+            Action<string> removeBoneFunc,
+            Action bakeFunc
         )
         {
             Color guic = GUI.color;
@@ -771,14 +866,27 @@ namespace DynamicBoneDistributionEditor
                     wrapper.Active = true;
                 }
             }
-            if (editableList.IsEdited) GUI.color = Color.magenta;
-            else GUI.enabled = false;
-            if (GUILayout.Button(new GUIContent("R", $"Reset {controlName}"), GUILayout.Width(25)))
+
+            if (!bakeMode)
             {
-                resetFunc.Invoke();
+                if (editableList.IsEdited) GUI.color = Color.magenta;
+                else GUI.enabled = false;
+                if (GUILayout.Button(new GUIContent("R", $"Reset {controlName}"), GUILayout.Width(25)))
+                {
+                    resetFunc.Invoke();
+                }
+                GUI.enabled = true;
+                GUI.color = guic;
             }
-            GUI.enabled = true;
-            GUI.color = guic;
+            else
+            {
+                GUI.color = Color.yellow;
+                if (GUILayout.Button(new GUIContent("B", $"Bake {controlName}"), GUILayout.Width(25)))
+                {
+                    Baker.StartBaker(bakeFunc, $"{controlName}");
+                }
+                GUI.color = guic;
+            }
             GUILayout.EndHorizontal();
             #endregion
             if (!wrapper.Active) return;
@@ -851,7 +959,8 @@ namespace DynamicBoneDistributionEditor
             Vector3EditWrapper wrapper,
             ref EditableValue<Vector3> editableValue,
             Action applyFunc,
-            Action resetFunc
+            Action resetFunc,
+            Action bakeFunc
         )
         {
             Color guic = GUI.color;
@@ -904,15 +1013,28 @@ namespace DynamicBoneDistributionEditor
                     Clipboard = new ClipboardEntry(currentIndex, 0, editableValue.value);
                 }
             }
-            if (isEditedFunc.Invoke(null)) GUI.color = Color.magenta;
-            else GUI.enabled = false;
-            if (GUILayout.Button(new GUIContent("R", $"Reset {VectorName}"), GUILayout.Width(25)))
+
+            if (!bakeMode)
             {
-                resetFunc.Invoke();
-                wrapper.Value = editableValue.value;
+                if (isEditedFunc.Invoke(null)) GUI.color = Color.magenta;
+                else GUI.enabled = false;
+                if (GUILayout.Button(new GUIContent("R", $"Reset {VectorName}"), GUILayout.Width(25)))
+                {
+                    resetFunc.Invoke();
+                    wrapper.Value = editableValue.value;
+                }
+                GUI.enabled = true;
+                GUI.color = guic;
             }
-            GUI.enabled = true;
-            GUI.color = guic;
+            else
+            {
+                GUI.color =  Color.yellow;
+                if (GUILayout.Button(new GUIContent("B", $"Bake  {VectorName}"), GUILayout.Width(25)))
+                {
+                    Baker.StartBaker(bakeFunc, $"{VectorName}");
+                }
+                GUI.color = guic;
+            }
             GUILayout.EndHorizontal();
             #endregion
             // == sliders ==
@@ -1003,8 +1125,9 @@ namespace DynamicBoneDistributionEditor
                     Clipboard = new ClipboardEntry(currentIndex, -2, axis == Vector3EditWrapper.Axis.X ? wrapper.ValueX : (axis == Vector3EditWrapper.Axis.Y ? wrapper.ValueY : wrapper.ValueZ));
                 }
             }
+
             if (isEditedFunc.Invoke((int)axis)) GUI.color = Color.magenta;
-            else GUI.enabled = false;
+                else GUI.enabled = false;
             if (GUILayout.Button(new GUIContent("R", $"Reset {AxisLetter}"), GUILayout.Width(25))) // draw reset button
             {
                 switch (axis)
@@ -1220,6 +1343,72 @@ namespace DynamicBoneDistributionEditor
                 _rootTransform.FindLoopAll(list);
                 transformSuggestions.Clear();
                 transformSuggestions.AddRange(list.Select(x => _rootTransform.GetPathToChild(x.transform)).Where(name => !name.IsNullOrEmpty() && name.IndexOf(_addBoneText, StringComparison.OrdinalIgnoreCase) >= 0).Take(5).ToList());
+            }
+        }
+
+        private static class Baker
+        {
+            private static bool SkipBakeWarning { get; set; } = false;
+            public static string SettingName { get; set; }
+            public static Action BakeAction { get; set; }
+            private static bool bakeWindowActive;
+
+            private static Texture2D _background = null;
+            private static GUIStyle _backgroundStyle = null;
+
+            private static bool checkBox = false;
+            
+            [SuppressMessage("ReSharper", "PossibleLossOfFraction")]
+            public static void OnGui()
+            {
+                if (!bakeWindowActive) return;
+                if (_backgroundStyle == null)
+                {
+                    _background = new Texture2D(2, 2);
+                    Color color = new Color(0f, 0f, 0f, 0.3f);
+                    _background.SetPixels(new[] { color, color, color, color });
+                    _backgroundStyle = new GUIStyle(GUI.skin.box)
+                    {
+                        normal =
+                        {
+                            background = _background
+                        }
+                    };
+                }
+
+                GUI.Label(new Rect(0,0, Screen.width, Screen.height), "", _backgroundStyle);
+                
+                GUI.Box(new Rect(Screen.width/2-200, Screen.height/2-100, 400, 200), "WARNING");
+                GUI.Label(new Rect(Screen.width/2-190, Screen.height/2-70, 380, 60), $"Do you really want to bake the value of {SettingName}? This action is irreversible!");
+                
+                checkBox = GUI.Toggle(new Rect(Screen.width / 2 - 190, Screen.height/2+15, 380, 20), checkBox,"   Do not show this again until restarting the game");
+                
+                if (GUI.Button(new Rect(Screen.width / 2 - 190, Screen.height/2+50, 185, 40), "Cancel"))
+                {
+                    bakeWindowActive = false;
+                }
+                
+                
+                if (GUI.Button(new Rect(Screen.width / 2 + 5, Screen.height/2+50, 185, 40), "Okay"))
+                {
+                    BakeAction.Invoke();
+                    if (checkBox) SkipBakeWarning = true;
+                    bakeWindowActive = false;
+                }
+            }
+
+            public static void StartBaker(Action action, string settingName)
+            {
+                if (DBDE.showBakeModeWarning.Value && !SkipBakeWarning)
+                {
+                    bakeWindowActive = true;
+                    SettingName = settingName;
+                    BakeAction = action;
+                }
+                else
+                {
+                    action.Invoke();
+                }
             }
         }
     }

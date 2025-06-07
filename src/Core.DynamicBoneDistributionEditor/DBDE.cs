@@ -32,7 +32,7 @@ namespace DynamicBoneDistributionEditor
     {
         public const string PluginName = "DynamicBoneDistributionEditor";
         public const string GUID = "org.njaecha.plugins.dbde";
-        public const string Version = "1.5.1";
+        public const string Version = "2.0.0";
 
         internal new static ManualLogSource Logger;
         internal static DBDE Instance;
@@ -41,8 +41,10 @@ namespace DynamicBoneDistributionEditor
 
         internal static SidebarToggle toggle;
 
-        public static ConfigEntry<bool> loadSettingsAsDefault;
         public static ConfigEntry<bool> drawGizmos;
+        public static ConfigEntry<bool> showBakeModeWarning;
+        public static ConfigEntry<bool> verboseLogging;
+        public static ConfigEntry<bool> verboseStopUiSpam;
 
         private static Button DBDEStudioButton;
         
@@ -67,8 +69,11 @@ namespace DynamicBoneDistributionEditor
 
             MakerAPI.MakerExiting += LeavingMaker;
 
-            loadSettingsAsDefault = Config.Bind("", "Load Settings as default", false, "Enable this to load the settings saved by DBDE as defaults (for the revert buttons) instead of the dynamic bone's own defaults (set by game/zipmod).");
             drawGizmos = Config.Bind("", "Draw Gizmos", true, "Toggle gizmos. Can also be toggled in the UI");
+            showBakeModeWarning = Config.Bind("", "Show Bake Warning", true,
+                "Disable this to never show the warning before baking edits (setting the current state as not edited)");
+            verboseLogging = Config.Bind("Logging", "Verbose Logging", false, "Toggle verbose logging.");
+            verboseStopUiSpam = Config.Bind("Logging", "Stop UI Spam", true, "If turned off the console will be spammed heavily by verbose logging");
 
             Instance = this;
 
@@ -275,7 +280,8 @@ namespace DynamicBoneDistributionEditor
         {
             string pPath = transform.GetFullPath().Trim().Replace(" [Transform]", "");
             string cPath = child.GetFullPath().Trim().Replace(" [Transform]", "");
-            if (pPath == cPath || pPath.IsNullOrEmpty() || cPath.IsNullOrEmpty() ) return null;
+            if (pPath.IsNullOrEmpty() || cPath.IsNullOrEmpty() ) return null;
+            if (pPath == cPath) return "";
             return !cPath.StartsWith(pPath) ? null : cPath.Replace(pPath, string.Empty).Remove(0,1);
         }
 
@@ -323,7 +329,7 @@ namespace DynamicBoneDistributionEditor
                 particle.m_Inert = Mathf.Clamp01(particle.m_Inert);
                 particle.m_Radius = Mathf.Max(particle.m_Radius, 0f);
 
-                if (particle.m_Transform != null)
+                if (particle.m_Transform)
                 {
                     particle.m_Transform.localPosition = particle.m_InitLocalPosition;
                     particle.m_Transform.localRotation = particle.m_InitLocalRotation;
@@ -352,6 +358,20 @@ namespace DynamicBoneDistributionEditor
                     return !Mathf.Approximately(self.value.z, self.initialValue.z);
                 default:
                     return false;
+            }
+        }
+        
+        /// <summary>
+        /// Setting this to false disables verbose logging temporarily even if the settings enable it.
+        /// Remember to turn back on.
+        /// </summary>
+        public static bool DoVerboseLoggingOverride = true;
+        
+        public static void LogVerbose(this ManualLogSource self, string message, LogLevel level = LogLevel.Debug)
+        {
+            if (DoVerboseLoggingOverride && DBDE.verboseLogging.Value)
+            {
+                self.Log(level, message);
             }
         }
     }
