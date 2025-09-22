@@ -549,7 +549,7 @@ namespace DynamicBoneDistributionEditor
 
         public void BakeActive()
         {
-            InitialActive = _active;
+            InitialActive = active;
         }
 
 		public AnimationCurve GetAnimationCurve(byte kind)
@@ -600,7 +600,7 @@ namespace DynamicBoneDistributionEditor
 
         public byte[] SerialiseAll()
         {
-            // still serialise as List<byte[]> put only add the Serialised keyframe.
+            // still serialise as List<byte[]> put only add the Serialised edit.
             return MessagePackSerializer.Serialize(new List<byte[]>{MessagePackSerializer.Serialize(new SerialisedEdit(this))});
         }
 
